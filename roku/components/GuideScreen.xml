@@ -27,22 +27,22 @@
         <Timer id="refreshTimer" repeat="true" duration="300" />
 
         <Group id="guideHeader" translation="[0, 0]">
-            <Rectangle width="1920" height="56" color="0x142238FF" />
-            <Label translation="[24, 0]" width="276" height="56" text="Channel" font="font:MediumBoldSystemFont" vertAlign="center" />
-            <Label id="firstTimeLabel" translation="[332, 0]" width="448" height="56" font="font:MediumBoldSystemFont" vertAlign="center" />
-            <Label id="secondTimeLabel" translation="[812, 0]" width="448" height="56" font="font:MediumBoldSystemFont" vertAlign="center" />
-            <Label id="thirdTimeLabel" translation="[1292, 0]" width="448" height="56" font="font:MediumBoldSystemFont" vertAlign="center" />
-            <Label id="filterLabel" translation="[1440, 0]" width="466" height="56" font="font:MediumSystemFont" horizAlign="right" vertAlign="center" color="0xBFD2E6FF" />
+            <Rectangle width="1920" height="62" color="0x142238FF" />
+            <Label translation="[24, 0]" width="316" height="62" text="Channel" font="font:LargeBoldSystemFont" vertAlign="center" />
+            <Label id="firstTimeLabel" translation="[372, 0]" width="494" height="62" font="font:LargeBoldSystemFont" vertAlign="center" />
+            <Label id="secondTimeLabel" translation="[898, 0]" width="494" height="62" font="font:LargeBoldSystemFont" vertAlign="center" />
+            <Label id="thirdTimeLabel" translation="[1424, 0]" width="424" height="62" font="font:LargeBoldSystemFont" vertAlign="center" />
+            <Label id="filterLabel" translation="[1440, 0]" width="466" height="62" font="font:LargeSystemFont" horizAlign="right" vertAlign="center" color="0xBFD2E6FF" />
         </Group>
 
         <MarkupGrid id="guideGrid"
-            translation="[0, 58]"
+            translation="[0, 64]"
             itemComponentName="GuideRow"
-            itemSize="[1920, 66]"
+            itemSize="[1920, 88]"
             itemSpacing="[0, 2]"
             numColumns="1"
-            numRows="12"
-            clippingRect="[0, 0, 1920, 814]"
+            numRows="9"
+            clippingRect="[0, 0, 1920, 838]"
             drawFocusFeedback="false"
             vertFocusAnimationStyle="fixedFocusWrap" />
 
