@@ -8,18 +8,18 @@
     </interface>
 
     <children>
-        <Rectangle id="background" width="1920" height="60" color="0x101820FF" />
-        <Rectangle id="channelBackground" width="300" height="60" color="0x142238FF" />
-        <Rectangle id="recentAccent" translation="[0, 0]" width="4" height="60" color="0x38BDF8FF" visible="false" />
-        <Rectangle translation="[300, 0]" width="2" height="60" color="0x334155FF" />
-        <Rectangle translation="[780, 0]" width="2" height="60" color="0x334155FF" />
-        <Rectangle translation="[1260, 0]" width="2" height="60" color="0x334155FF" />
-        <Poster id="channelLogo" translation="[10, 5]" width="58" height="50" loadDisplayMode="scaleToFit" />
-        <Label id="channelLabel" translation="[78, 0]" width="176" height="60" font="font:SmallBoldSystemFont" vertAlign="center" ellipsizeOnBoundary="true" />
-        <Label id="favoriteStar" translation="[252, 0]" width="36" height="60" text="*" font="font:MediumBoldSystemFont" horizAlign="center" vertAlign="center" color="0xF5B301FF" visible="false" />
-        <Label id="firstLabel" translation="[324, 0]" width="432" height="60" font="font:SmallSystemFont" vertAlign="center" ellipsizeOnBoundary="true" />
-        <Label id="secondLabel" translation="[804, 0]" width="432" height="60" font="font:SmallSystemFont" vertAlign="center" ellipsizeOnBoundary="true" />
-        <Label id="thirdLabel" translation="[1284, 0]" width="612" height="60" font="font:SmallSystemFont" vertAlign="center" ellipsizeOnBoundary="true" />
+        <Rectangle id="background" width="1920" height="66" color="0x101820FF" />
+        <Rectangle id="channelBackground" width="300" height="66" color="0x142238FF" />
+        <Rectangle id="recentAccent" translation="[0, 0]" width="4" height="66" color="0x38BDF8FF" visible="false" />
+        <Rectangle translation="[300, 0]" width="2" height="66" color="0x334155FF" />
+        <Rectangle translation="[780, 0]" width="2" height="66" color="0x334155FF" />
+        <Rectangle translation="[1260, 0]" width="2" height="66" color="0x334155FF" />
+        <Poster id="channelLogo" translation="[10, 8]" width="58" height="50" loadDisplayMode="scaleToFit" />
+        <Label id="channelLabel" translation="[76, 0]" width="192" height="66" font="font:MediumBoldSystemFont" vertAlign="center" ellipsizeOnBoundary="true" />
+        <Label id="favoriteStar" translation="[270, 0]" width="30" height="66" text="*" font="font:LargeBoldSystemFont" horizAlign="center" vertAlign="center" color="0xF5B301FF" visible="false" />
+        <Label id="firstLabel" translation="[332, 0]" width="416" height="66" font="font:MediumSystemFont" vertAlign="center" ellipsizeOnBoundary="true" />
+        <Label id="secondLabel" translation="[812, 0]" width="416" height="66" font="font:MediumSystemFont" vertAlign="center" ellipsizeOnBoundary="true" />
+        <Label id="thirdLabel" translation="[1292, 0]" width="596" height="66" font="font:MediumSystemFont" vertAlign="center" ellipsizeOnBoundary="true" />
     </children>
 
     <script type="text/brightscript" uri="GuideRow.brs" />
