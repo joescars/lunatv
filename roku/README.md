@@ -28,10 +28,11 @@ play it; use **Options** to delete a completed recording or stop an active one.
 
 ### Live playback
 
-![LunaTV Roku live playback showing the channel and program information bar](../docs/roku/show.jpg)
+![LunaTV Roku live playback showing a brief channel/program confirmation](../docs/roku/show.jpg)
 
-The in-player information bar identifies the tuned channel and current program.
-Press **OK** or **Options** to show it again while watching live TV.
+After tuning, a compact channel/program confirmation appears briefly and then
+clears automatically. Press **OK** or **Options / `*`** to open the playback menu
+for full program details and actions at any time.
 
 ### Stream diagnostics
 
@@ -124,9 +125,12 @@ at `http://<roku-ip>`, user `rokudev`):
 - **Live preview:** A small H.264 preview starts after guide focus settles. It
   is best effort and uses a tuner while playing; turn it off in Settings if
   tuner capacity is limited.
-- **Live TV:** Press **OK** or **Options** for the channel/program info bar,
-  **Rewind/Fast Forward** to surf visible guide channels, and **Up** to toggle
-  the diagnostics overlay.
+- **Live TV:** Press **OK** or **Options / `*`** for the playback menu. Use
+  **Up/Down** to move through Favorites, Record current program, and Program
+  details; press **OK** to select. **Back** closes the menu and resumes
+  playback. **Rewind/Fast Forward** surf visible guide channels, **Up** outside
+  the menu toggles diagnostics, **Down** schedules the current airing, and
+  **Play/Star** toggles the channel favorite directly.
 - **DVR:** Press **Play** on the guide to open recordings. Press **OK** to play
   a recording, **Options** to delete a completed recording or stop an active
   one, and **Back** to return. Active entries are labeled `RECORDING NOW` and

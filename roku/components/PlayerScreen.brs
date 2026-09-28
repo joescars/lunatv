@@ -11,13 +11,33 @@ sub init()
     m.statsPanel = m.top.findNode("statsPanel")
     m.statsTitle = m.top.findNode("statsTitle")
     m.statsBody = m.top.findNode("statsBody")
-    m.channelInfoOverlay = m.top.findNode("channelInfoOverlay")
-    m.infoChannelLabel = m.top.findNode("infoChannelLabel")
-    m.infoNowLabel = m.top.findNode("infoNowLabel")
-    m.infoNextLabel = m.top.findNode("infoNextLabel")
-    m.infoLogo = m.top.findNode("infoLogo")
-    m.infoDescriptionLabel = m.top.findNode("infoDescriptionLabel")
-    m.recordingIndicator = m.top.findNode("recordingIndicator")
+    m.channelMenuOverlay = m.top.findNode("channelMenuOverlay")
+    m.channelMenuBackdrop = m.top.findNode("channelMenuBackdrop")
+    m.channelNotice = m.top.findNode("channelNotice")
+    m.channelNoticeLabel = m.top.findNode("channelNoticeLabel")
+    m.channelNoticeDetail = m.top.findNode("channelNoticeDetail")
+    m.menuLogo = m.top.findNode("menuLogo")
+    m.menuChannelLabel = m.top.findNode("menuChannelLabel")
+    m.menuChannelMeta = m.top.findNode("menuChannelMeta")
+    m.menuProgramLabel = m.top.findNode("menuProgramLabel")
+    m.menuProgramMeta = m.top.findNode("menuProgramMeta")
+    m.menuNextLabel = m.top.findNode("menuNextLabel")
+    m.menuSynopsisLabel = m.top.findNode("menuSynopsisLabel")
+    m.menuActionsContent = m.top.findNode("menuActionsContent")
+    m.menuDetailsContent = m.top.findNode("menuDetailsContent")
+    m.menuDetailsTitle = m.top.findNode("menuDetailsTitle")
+    m.menuDetailsMeta = m.top.findNode("menuDetailsMeta")
+    m.menuDetailsSynopsis = m.top.findNode("menuDetailsSynopsis")
+    m.menuStatusLabel = m.top.findNode("menuStatusLabel")
+    m.menuStatusTimer = m.top.findNode("menuStatusTimer")
+    m.menuFavoriteLabel = m.top.findNode("menuFavoriteLabel")
+    m.menuRecordLabel = m.top.findNode("menuRecordLabel")
+    m.menuDetailsActionLabel = m.top.findNode("menuDetailsActionLabel")
+    m.menuActionBackgrounds = [m.top.findNode("menuFavoriteBg"), m.top.findNode("menuRecordBg"), m.top.findNode("menuDetailsBg")]
+    m.menuActionLabels = [m.menuFavoriteLabel, m.menuRecordLabel, m.menuDetailsActionLabel]
+    m.menuVisible = false
+    m.menuDetailsVisible = false
+    m.menuFocusIndex = 0
     m.infoHideTimer = m.top.findNode("infoHideTimer")
     m.tuningStarted = false
     m.statsVisible = false
@@ -34,6 +54,7 @@ sub init()
     m.video.observeField("state", "onVideoStateChange")
     m.statsTimer.observeField("fire", "onStatsTimerFire")
     m.infoHideTimer.observeField("fire", "onInfoHideTimerFire")
+    m.menuStatusTimer.observeField("fire", "onMenuStatusTimerFire")
 end sub
 
 ' Public - callable from MainScene when this screen becomes top-of-stack.
@@ -113,6 +134,8 @@ end sub
 ' Steps to the previous (-1) or next (+1) channel in the guide order and
 ' re-runs the tuning handshake. Wraps around at both ends.
 sub changeChannelBy(delta as integer)
+    if m.menuVisible then hideChannelMenu()
+    hideChannelNotice()
     if m.channels = invalid or m.channels.Count() = 0 then return
     if m.currentIndex = invalid then return
 
@@ -135,13 +158,9 @@ sub changeChannelBy(delta as integer)
     m.top.currentSynopsis = ch.currentSynopsis
     m.top.currentStart = ch.currentStart
     m.top.currentDuration = ch.currentDuration
-    m.top.currentStart = ch.currentStart
-    m.top.channelLogo = ch.channelLogo
-    m.top.currentDuration = ch.currentDuration
     m.top.channelLogo = ch.channelLogo
     m.top.nextTitle = ch.nextTitle
     m.recordingScheduled = false
-    updateRecordingIndicator()
 
     if m.streamTask <> invalid
         m.streamTask.control = "STOP"
@@ -154,7 +173,6 @@ sub changeChannelBy(delta as integer)
     hideStatsPanel()
     m.failed = false
     startTuning()
-    showChannelInfo()
 end sub
 
 sub onStreamStartResult(event as object)
@@ -164,6 +182,7 @@ sub onStreamStartResult(event as object)
 
     if result.state = "ready"
         playStream()
+        showChannelNotice()
     else
         ' The server's /ready error field carries an ffmpeg stderr tail that can
         ' run to thousands of characters. Full text goes to the debug console
@@ -254,50 +273,30 @@ sub playStream()
     m.video.content = content
     m.video.visible = true
     m.video.control = "play"
-
-    showChannelInfo()
 end sub
 
-' --- program info overlay -------------------------------------------------
-
-' Snapshot at tune time (from the guide's already-fetched EPG data), not
-' live-updated while a program is playing - accurate whenever you tune or
-' channel-surf, which covers the main "what is this" use case without
-' needing a periodic re-fetch during playback.
-sub showChannelInfo()
-    if m.infoChannelLabel = invalid then return
-
+' --- channel confirmation --------------------------------------------------
+sub showChannelNotice()
     channelText = m.top.channelNumber.ToStr() + "  " + m.top.channelName
-    m.infoChannelLabel.text = channelText
-    if m.infoLogo <> invalid
-        m.infoLogo.uri = m.top.channelLogo
-        m.infoLogo.visible = (m.top.channelLogo <> invalid and m.top.channelLogo <> "")
-    end if
-
-    title = ""
+    if m.channelNoticeLabel <> invalid then m.channelNoticeLabel.text = channelText
+    if m.top.channelName = "" and m.channelNoticeLabel <> invalid then m.channelNoticeLabel.text = "Channel " + m.top.channelNumber.ToStr()
+    title = "Live TV"
     if m.top.currentTitle <> invalid and m.top.currentTitle <> "" then title = m.top.currentTitle
-    if title = "" then title = "(no program info)"
-    endText = formatProgramEndTime(m.top.currentStart, m.top.currentDuration)
-    if endText <> "" then title = title + "  ·  ends " + endText
-    m.infoNowLabel.text = title
-
-    nextTitle = m.top.nextTitle
-    if nextTitle <> invalid and nextTitle <> ""
-        m.infoNextLabel.text = "Next: " + nextTitle
-        m.infoNextLabel.visible = true
-    else
-        m.infoNextLabel.visible = false
+    if m.channelNoticeDetail <> invalid then m.channelNoticeDetail.text = title
+    m.channelNotice.visible = true
+    if m.infoHideTimer <> invalid
+        m.infoHideTimer.control = "stop"
+        m.infoHideTimer.control = "start"
     end if
+end sub
 
-    synopsis = ""
-    if m.top.currentSynopsis <> invalid then synopsis = m.top.currentSynopsis
-    m.infoDescriptionLabel.text = synopsis
-    m.infoDescriptionLabel.visible = (synopsis <> "")
+sub hideChannelNotice()
+    if m.channelNotice <> invalid then m.channelNotice.visible = false
+    if m.infoHideTimer <> invalid then m.infoHideTimer.control = "stop"
+end sub
 
-    m.channelInfoOverlay.visible = true
-    updateRecordingIndicator()
-    m.infoHideTimer.control = "stop"
-    m.infoHideTimer.control = "start"
+sub onInfoHideTimerFire(event as object)
+    hideChannelNotice()
 end sub
 
 function formatProgramEndTime(startTime as dynamic, duration as dynamic) as string
@@ -317,23 +316,137 @@ function formatProgramEndTime(startTime as dynamic, duration as dynamic) as stri
     return displayHour.ToStr() + ":" + minuteText + " " + suffix
 end function
 
-sub hideChannelInfo()
-    m.channelInfoOverlay.visible = false
-    m.infoHideTimer.control = "stop"
+sub updateChannelMenu()
+    channelText = m.top.channelNumber.ToStr() + "  " + m.top.channelName
+    if m.menuChannelLabel <> invalid then m.menuChannelLabel.text = channelText
+    if m.menuLogo <> invalid
+        m.menuLogo.uri = m.top.channelLogo
+        m.menuLogo.visible = (m.top.channelLogo <> invalid and m.top.channelLogo <> "")
+    end if
+
+    title = "Program information unavailable"
+    if m.top.currentTitle <> invalid and m.top.currentTitle <> "" then title = m.top.currentTitle
+    if m.menuProgramLabel <> invalid then m.menuProgramLabel.text = title
+    if m.menuDetailsTitle <> invalid then m.menuDetailsTitle.text = title
+
+    endText = formatProgramEndTime(m.top.currentStart, m.top.currentDuration)
+    programMeta = "On now"
+    if endText <> "" then programMeta = "On now  ·  Ends " + endText
+    if m.menuProgramMeta <> invalid then m.menuProgramMeta.text = programMeta
+    if m.menuDetailsMeta <> invalid then m.menuDetailsMeta.text = programMeta
+
+    channelMeta = "Channel " + m.top.channelNumber.ToStr()
+    codecText = UCase(normalizeCodec(m.top.codec))
+    channelMeta = channelMeta + "  ·  " + codecText
+    if m.menuChannelMeta <> invalid then m.menuChannelMeta.text = channelMeta
+
+    nextTitle = m.top.nextTitle
+    if m.menuNextLabel <> invalid
+        if nextTitle <> invalid and nextTitle <> ""
+            m.menuNextLabel.text = "Up next  ·  " + nextTitle
+            m.menuNextLabel.visible = true
+        else
+            m.menuNextLabel.text = ""
+            m.menuNextLabel.visible = false
+        end if
+    end if
+
+    synopsis = "Program description unavailable."
+    if m.top.currentSynopsis <> invalid and m.top.currentSynopsis <> "" then synopsis = m.top.currentSynopsis
+    if m.menuSynopsisLabel <> invalid then m.menuSynopsisLabel.text = synopsis
+    if m.menuDetailsSynopsis <> invalid then m.menuDetailsSynopsis.text = synopsis
+    updateFavoriteActionLabel()
 end sub
 
-sub onInfoHideTimerFire(event as object)
-    hideChannelInfo()
-end sub
-
-' Bound to both OK and the * (Options) button during normal playback -
-' OK is the more natural "what am I watching" button for most users, kept
-' Options bound too since it was already documented/expected there.
-sub toggleChannelInfo()
-    if m.channelInfoOverlay <> invalid and m.channelInfoOverlay.visible = true
-        hideChannelInfo()
+sub updateFavoriteActionLabel()
+    if m.menuFavoriteLabel = invalid then return
+    favorite = false
+    if m.currentIndex <> invalid and m.channels <> invalid and m.currentIndex < m.channels.Count()
+        favorite = (m.channels[m.currentIndex].favorite = true)
+    end if
+    if favorite
+        m.menuFavoriteLabel.text = "Remove from Favorites"
     else
-        showChannelInfo()
+        m.menuFavoriteLabel.text = "Add to Favorites"
+    end if
+end sub
+
+sub updateChannelMenuFocus()
+    for i = 0 to 2
+        selected = (i = m.menuFocusIndex)
+        if selected
+            m.menuActionBackgrounds[i].color = "0xD9F2FFFF"
+            m.menuActionLabels[i].color = "0x0A1428FF"
+        else
+            m.menuActionBackgrounds[i].color = "0x142238FF"
+            m.menuActionLabels[i].color = "0xFFFFFFFF"
+        end if
+    end for
+end sub
+
+sub showChannelMenu()
+    if m.channelMenuOverlay = invalid then return
+    hideStatsPanel()
+    hideChannelNotice()
+    m.menuDetailsVisible = false
+    m.menuActionsContent.visible = true
+    m.menuDetailsContent.visible = false
+    m.menuStatusLabel.visible = false
+    if m.menuStatusTimer <> invalid then m.menuStatusTimer.control = "stop"
+    m.menuFocusIndex = 0
+    updateChannelMenu()
+    updateChannelMenuFocus()
+    m.channelMenuBackdrop.visible = true
+    m.menuVisible = true
+    m.channelMenuOverlay.visible = true
+end sub
+
+sub hideChannelMenu()
+    if m.channelMenuBackdrop <> invalid then m.channelMenuBackdrop.visible = false
+    if m.channelMenuOverlay <> invalid then m.channelMenuOverlay.visible = false
+    if m.menuStatusTimer <> invalid then m.menuStatusTimer.control = "stop"
+    if m.menuStatusLabel <> invalid then m.menuStatusLabel.visible = false
+    m.menuVisible = false
+    m.menuDetailsVisible = false
+    hideChannelNotice()
+end sub
+
+sub showChannelMenuStatus(message as string)
+    if m.menuStatusLabel = invalid then return
+    m.menuStatusLabel.text = message
+    m.menuStatusLabel.visible = true
+    m.menuStatusTimer.control = "stop"
+    m.menuStatusTimer.control = "start"
+end sub
+
+sub onMenuStatusTimerFire(event as object)
+    if m.menuStatusLabel <> invalid then m.menuStatusLabel.visible = false
+end sub
+
+sub moveChannelMenuFocus(delta as integer)
+    m.menuFocusIndex = m.menuFocusIndex + delta
+    if m.menuFocusIndex < 0 then m.menuFocusIndex = 2
+    if m.menuFocusIndex > 2 then m.menuFocusIndex = 0
+    updateChannelMenuFocus()
+end sub
+
+sub selectChannelMenuAction()
+    if m.menuFocusIndex = 0
+        toggleFavorite()
+    else if m.menuFocusIndex = 1
+        recordCurrentAiring()
+    else
+        m.menuDetailsVisible = true
+        m.menuActionsContent.visible = false
+        m.menuDetailsContent.visible = true
+    end if
+end sub
+
+sub toggleChannelMenu()
+    if m.menuVisible
+        hideChannelMenu()
+    else
+        showChannelMenu()
     end if
 end sub
 
@@ -341,6 +454,7 @@ sub onVideoStateChange(event as object)
     state = event.getData()
 
     if state = "error"
+        hideChannelMenu()
         if m.video.errorMsg <> invalid and m.video.errorMsg <> ""
             print "[PlayerScreen] playback error: "; m.video.errorMsg
         end if
@@ -358,7 +472,8 @@ end sub
 sub showOverlay(text as string, showSpinner as boolean)
     m.video.visible = false
     hideStatsPanel()
-    hideChannelInfo()
+    hideChannelMenu()
+    hideChannelNotice()
     m.overlayBg.visible = true
     m.spinner.visible = showSpinner
     m.statusLabel.visible = true
@@ -534,6 +649,8 @@ end function
 
 sub showStatsPanel()
     if m.statsVisible = true then return
+    hideChannelMenu()
+    hideChannelNotice()
     m.statsVisible = true
     m.statsPanel.visible = true
     m.statsBody.text = "Loading diagnostics..."
@@ -558,43 +675,80 @@ end sub
 ' --- key handling / teardown --------------------------------------------
 
 function onKeyEvent(key as string, press as boolean) as boolean
-    if press and key = "options"
-        if m.channelInfoOverlay.visible = true
+    if not press then return false
+
+    if m.menuVisible
+        if m.menuDetailsVisible
+            if key = "OK" or key = "back"
+                m.menuDetailsVisible = false
+                m.menuDetailsContent.visible = false
+                m.menuActionsContent.visible = true
+                return true
+            end if
+            return true
+        end if
+
+        if key = "up"
+            moveChannelMenuFocus(-1)
+            return true
+        else if key = "down"
+            moveChannelMenuFocus(1)
+            return true
+        else if key = "OK"
+            selectChannelMenuAction()
+            return true
+        else if key = "back"
+            hideChannelMenu()
+            return true
+        else if key = "options"
+            hideChannelMenu()
+            return true
+        else if key = "star" or key = "play"
             toggleFavorite()
-        else
-            showChannelInfo()
+            return true
+        else if key = "rewind"
+            changeChannelBy(-1)
+            return true
+        else if key = "forward"
+            changeChannelBy(1)
+            return true
         end if
         return true
     end if
-    if press and key = "down"
+
+    if key = "options"
+        showChannelMenu()
+        return true
+    end if
+    if key = "up"
+        toggleStatsPanel()
+        return true
+    end if
+    if key = "down"
         recordCurrentAiring()
         return true
     end if
-    if press and key = "star"
+    if key = "star" or key = "play"
         toggleFavorite()
         return true
     end if
-    if press and key = "play"
-        toggleFavorite()
-        return true
-    end if
-    if press and key = "rewind"
+    if key = "rewind"
         changeChannelBy(-1)
         return true
     end if
-    if press and key = "forward"
+    if key = "forward"
         changeChannelBy(1)
         return true
     end if
-    if press and key = "OK"
+    if key = "OK"
         if m.failed = true
             startTuning()
         else
-            toggleChannelInfo()
+            toggleChannelMenu()
         end if
         return true
     end if
-    if press and key = "back"
+    if key = "back"
         closePlayer()
         return true
     end if
@@ -603,11 +757,19 @@ end function
 
 sub recordCurrentAiring()
     if m.recordTask <> invalid
-        showRecordingNotice("Scheduling current airing...")
+        if m.menuVisible
+            showChannelMenuStatus("Scheduling current program…")
+        else
+            showChannelNoticeStatus("Scheduling current program…")
+        end if
         return
     end if
     if m.recordingScheduled = true
-        showRecordingNotice("Recording already scheduled")
+        if m.menuVisible
+            showChannelMenuStatus("Recording already scheduled")
+        else
+            showChannelNoticeStatus("Recording already scheduled")
+        end if
         return
     end if
     task = CreateObject("roSGNode", "RecordCurrentTask")
@@ -615,7 +777,11 @@ sub recordCurrentAiring()
     task.channelNumber = m.top.channelNumber
     task.observeField("result", "onRecordResult")
     m.recordTask = task
-    showRecordingNotice("Scheduling current airing...")
+    if m.menuVisible
+        showChannelMenuStatus("Scheduling current program…")
+    else
+        showChannelNoticeStatus("Scheduling current program…")
+    end if
     task.control = "RUN"
 end sub
 
@@ -624,32 +790,31 @@ sub onRecordResult(event as object)
     result = event.getData()
     if result <> invalid and result.success = true
         m.recordingScheduled = true
-        updateRecordingIndicator()
-        showRecordingNotice("Recording scheduled")
+        if m.menuVisible
+            showChannelMenuStatus("Recording scheduled")
+        else
+            showChannelNoticeStatus("Recording scheduled")
+        end if
     else
-        showRecordingNotice("Could not schedule recording")
+        if m.menuVisible
+            showChannelMenuStatus("Could not schedule recording")
+        else
+            showChannelNoticeStatus("Could not schedule recording")
+        end if
     end if
 end sub
 
-sub updateRecordingIndicator()
-    if m.recordingIndicator = invalid then return
-    m.recordingIndicator.visible = (m.recordingScheduled = true)
-end sub
-
 sub showRecordingNotice(message as string)
-    m.infoChannelLabel.text = "DVR"
-    m.infoNowLabel.text = message
-    m.infoDescriptionLabel.visible = false
-    m.infoNextLabel.visible = false
-    if m.infoLogo <> invalid then m.infoLogo.visible = false
-    m.channelInfoOverlay.visible = true
-    m.infoHideTimer.control = "stop"
-    m.infoHideTimer.control = "start"
+    showChannelNoticeStatus(message)
 end sub
 
 sub toggleFavorite()
     if m.favoriteTask <> invalid
-        showRecordingNotice("Updating favorite...")
+        if m.menuVisible
+            showChannelMenuStatus("Updating favorite…")
+        else
+            showChannelNoticeStatus("Updating favorite…")
+        end if
         return
     end if
     if m.currentIndex = invalid or m.channels = invalid then return
@@ -658,6 +823,7 @@ sub toggleFavorite()
     desired = not (ch.favorite = true)
     ch.favorite = desired
     m.channels[m.currentIndex] = ch
+    if m.menuVisible then updateFavoriteActionLabel()
 
     task = CreateObject("roSGNode", "FavoriteTask")
     task.serverUrl = m.top.serverUrl
@@ -668,9 +834,17 @@ sub toggleFavorite()
     task.control = "RUN"
 
     if desired
-        showRecordingNotice("Added to Favorites")
+        if m.menuVisible
+            showChannelMenuStatus("Added to Favorites")
+        else
+            showChannelNoticeStatus("Added to Favorites")
+        end if
     else
-        showRecordingNotice("Removed from Favorites")
+        if m.menuVisible
+            showChannelMenuStatus("Removed from Favorites")
+        else
+            showChannelNoticeStatus("Removed from Favorites")
+        end if
     end if
 end sub
 
@@ -683,7 +857,8 @@ sub onFavoriteResult(event as object)
             ch.favorite = result.favorite
             m.channels[m.currentIndex] = ch
         end if
-        showChannelInfo()
+        if m.menuVisible then updateFavoriteActionLabel()
+        if m.menuVisible then updateChannelMenuFocus()
         return
     end if
 
@@ -694,10 +869,17 @@ sub onFavoriteResult(event as object)
         ch.favorite = not (ch.favorite = true)
         m.channels[m.currentIndex] = ch
     end if
-    showRecordingNotice("Could not update favorite")
+    if m.menuVisible
+        updateFavoriteActionLabel()
+        updateChannelMenuFocus()
+        showChannelMenuStatus("Could not update favorite")
+    else
+        showChannelNoticeStatus("Could not update favorite")
+    end if
 end sub
 
 sub closePlayer()
+    hideChannelNotice()
     hideStatsPanel()
     if m.statsTask <> invalid
         m.statsTask.control = "STOP"

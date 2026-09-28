@@ -233,9 +233,9 @@ end sub
 sub updateFilterLabel()
     if m.filterLabel = invalid then return
     if m.filterMode = "favorites"
-        m.filterLabel.text = "Filter: Favorites  •  *: Options"
+        m.filterLabel.text = "Favorites  •  * Options"
     else
-        m.filterLabel.text = "Filter: All  •  *: Options"
+        m.filterLabel.text = "All  •  * Options"
     end if
 end sub
 

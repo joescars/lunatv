@@ -31,8 +31,8 @@
             <Label translation="[24, 0]" width="316" height="62" text="Channel" font="font:LargeBoldSystemFont" vertAlign="center" />
             <Label id="firstTimeLabel" translation="[372, 0]" width="494" height="62" font="font:LargeBoldSystemFont" vertAlign="center" />
             <Label id="secondTimeLabel" translation="[898, 0]" width="494" height="62" font="font:LargeBoldSystemFont" vertAlign="center" />
-            <Label id="thirdTimeLabel" translation="[1424, 0]" width="424" height="62" font="font:LargeBoldSystemFont" vertAlign="center" />
-            <Label id="filterLabel" translation="[1440, 0]" width="466" height="62" font="font:LargeSystemFont" horizAlign="right" vertAlign="center" color="0xBFD2E6FF" />
+            <Label id="thirdTimeLabel" translation="[1424, 0]" width="200" height="62" font="font:LargeBoldSystemFont" vertAlign="center" />
+            <Label id="filterLabel" translation="[1636, 0]" width="270" height="62" font="font:SmallBoldSystemFont" horizAlign="right" vertAlign="center" color="0xBFD2E6FF" />
         </Group>
 
         <MarkupGrid id="guideGrid"

@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LunaTV · Channel menu concepts</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #080e18;
+    --screen: #101b2b;
+    --screen-soft: #17263a;
+    --line: #34465d;
+    --text: #f5f8fc;
+    --muted: #a8bacd;
+    --accent: #38bdf8;
+    --accent-deep: #082d43;
+    --gold: #f2c66d;
+    --radius: 18px;
+    font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; color: var(--text); background: var(--bg); }
+  button { font: inherit; color: inherit; }
+  .page { max-width: 1440px; margin: 0 auto; padding: 30px clamp(18px, 4vw, 54px) 34px; }
+  .eyebrow { color: var(--accent); font-size: 11px; font-weight: 750; letter-spacing: .19em; text-transform: uppercase; }
+  header { display: flex; align-items: end; justify-content: space-between; gap: 28px; margin-bottom: 20px; }
+  h1 { margin: 8px 0 0; font-size: clamp(26px, 3.6vw, 43px); line-height: 1.08; letter-spacing: -.035em; }
+  .intro { max-width: 430px; margin: 0 0 2px; color: var(--muted); font-size: 14px; line-height: 1.55; }
+  .switcher { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin: 22px 0 12px; }
+  .switcher-label { margin-right: 4px; color: var(--muted); font-size: 12px; }
+  .variant-tab { min-height: 39px; padding: 0 15px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: #d7e2ed; cursor: pointer; transition: background .18s, border-color .18s, color .18s; }
+  .variant-tab:hover { background: #18283b; }
+  .variant-tab[aria-selected="true"] { border-color: #70d4ff; background: #153044; color: #fff; box-shadow: inset 0 0 0 1px #70d4ff55; }
+  .stage-wrap { position: relative; }
+  .stage { position: relative; isolation: isolate; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid #344258; border-radius: 12px; background: #0b1320; box-shadow: 0 28px 72px #0009; outline: none; }
+  .picture { position: absolute; z-index: -2; inset: 0; overflow: hidden; background: linear-gradient(180deg, #13243b 0%, #254266 34%, #5c605b 67%, #252d35 100%); }
+  .picture::before { content: ""; position: absolute; inset: -4%; background: radial-gradient(ellipse at 72% 26%, #8cc7d555 0, transparent 24%), radial-gradient(ellipse at 24% 45%, #eca85155 0, transparent 20%), linear-gradient(115deg, transparent 8%, #111a2b77 47%, transparent 70%); filter: saturate(.82); }
+  .window { position: absolute; top: 12%; width: 20%; height: 57%; border: 12px solid #10192499; background: repeating-linear-gradient(90deg, #7b9bb431 0 3px, transparent 3px 39px), repeating-linear-gradient(0deg, transparent 0 33px, #b8c7d126 33px 36px), linear-gradient(135deg, #253e56, #788275); opacity: .7; }
+  .window.one { left: 12%; transform: skewY(-4deg); }
+  .window.two { right: 12%; width: 25%; top: 9%; height: 62%; opacity: .52; transform: skewY(4deg); }
+  .light { position: absolute; top: 29%; left: 45%; width: 18%; height: 31%; border-radius: 50% 50% 8% 8%; background: linear-gradient(90deg, #b9c8d64a, #132338cc 25% 76%, #d59b6744); filter: blur(1px); opacity: .63; }
+  .light::before, .light::after { content: ""; position: absolute; bottom: -14%; width: 49%; height: 74%; border-radius: 48% 48% 5% 5%; background: #121d2bd9; }
+  .light::before { left: -32%; transform: rotate(9deg); }
+  .light::after { right: -32%; transform: rotate(-9deg); }
+  .ticker { position: absolute; right: 5.2%; bottom: 5.1%; padding: 9px 13px; border: 1px solid #ffffff33; background: #0c1628b8; color: #e5eaf0a8; font-size: clamp(7px, .82vw, 12px); letter-spacing: .16em; }
+  .live-chip { display: inline-flex; align-items: center; gap: 8px; width: max-content; color: #ffb6aa; font-size: clamp(8px, .8vw, 11px); font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+  .live-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #ff685b; box-shadow: 0 0 12px #ff685b99; }
+  .topline { position: absolute; top: 5.5%; left: 4.2%; right: 4.2%; display: flex; justify-content: space-between; align-items: center; }
+  .brand { color: #ffffffb3; font-size: clamp(8px, .9vw, 13px); font-weight: 800; letter-spacing: .17em; }
+  .scene-wash { position: absolute; z-index: -1; inset: 0; background: linear-gradient(90deg, #06101caa 0%, #08111c42 43%, transparent 83%), linear-gradient(0deg, #07101bd4 0%, #07101b00 47%); transition: background .2s; }
+  .stage[data-variant="dock"] .scene-wash { background: linear-gradient(0deg, #07101bf2 0%, #07101bce 37%, #07101b00 76%); }
+  .stage[data-variant="quick"] .scene-wash { background: linear-gradient(90deg, #07101bdc 0%, #07101b74 32%, transparent 65%); }
+  .stage-panel { position: absolute; top: 13%; left: 4.2%; bottom: 6%; display: flex; flex-direction: column; width: min(37%, 490px); min-width: 300px; padding: clamp(17px, 2.4vw, 34px); border: 1px solid #c8e3f51c; border-radius: 17px; background: linear-gradient(145deg, #0b1725ee, #0a1423e8); box-shadow: 0 20px 60px #0007; backdrop-filter: blur(9px); }
+  .channel-line { display: flex; align-items: center; gap: 14px; margin-top: 19px; }
+  .channel-mark { display: grid; place-items: center; flex: 0 0 auto; width: clamp(36px, 4.4vw, 56px); aspect-ratio: 1; border-radius: 13px; background: #e8eff8; color: #12304a; font-size: clamp(13px, 1.4vw, 19px); font-weight: 900; letter-spacing: -.05em; }
+  .channel-name { font-size: clamp(12px, 1.3vw, 17px); font-weight: 680; }
+  .channel-sub { margin-top: 4px; color: var(--muted); font-size: clamp(9px, .9vw, 12px); }
+  .program-title { margin: 23px 0 8px; font-size: clamp(22px, 2.8vw, 37px); line-height: 1.04; letter-spacing: -.035em; }
+  .program-meta { color: #c5d4e3; font-size: clamp(10px, 1vw, 13px); }
+  .program-copy { margin: 13px 0 0; color: #b2c1d0; font-size: clamp(10px, 1vw, 13px); line-height: 1.48; }
+  .on-now { display: flex; justify-content: space-between; margin-top: 19px; color: #d6e2ee; font-size: clamp(9px, .9vw, 12px); }
+  .progress { height: 4px; margin-top: 8px; overflow: hidden; border-radius: 5px; background: #ffffff35; }
+  .progress > span { display: block; width: 42%; height: 100%; border-radius: inherit; background: var(--accent); }
+  .action-list { display: grid; gap: 7px; margin-top: auto; padding-top: 16px; }
+  .action { display: flex; align-items: center; width: 100%; min-height: clamp(42px, 5.5vh, 56px); padding: 0 15px; gap: 13px; border: 1px solid transparent; border-radius: 10px; background: #ffffff09; color: #f6f8fa; text-align: left; cursor: pointer; transition: background .16s, transform .16s, color .16s, border-color .16s; }
+  .action:hover { background: #ffffff14; }
+  .action.is-focused { transform: scale(1.025); border-color: #a8e6ff; background: #daf3ff; color: #092033; box-shadow: 0 5px 24px #0005, inset 0 0 0 1px #ffffff; }
+  .action-symbol { display: grid; place-items: center; width: 25px; color: var(--accent); font-size: 18px; font-weight: 750; }
+  .action.is-focused .action-symbol { color: #07547b; }
+  .action-main { flex: 1; font-size: clamp(11px, 1.05vw, 14px); font-weight: 680; }
+  .action-hint { color: #b3c4d5; font-size: clamp(8px, .8vw, 11px); }
+  .action.is-focused .action-hint { color: #496376; }
+  .keycap { min-width: 25px; height: 25px; display: grid; place-items: center; border: 1px solid currentColor; border-radius: 6px; color: #b5c3d1; font-size: 11px; }
+  .action.is-focused .keycap { color: #496376; }
+  .panel-footer { display: flex; align-items: center; justify-content: space-between; gap: 9px; margin-top: 14px; color: #a3b3c3; font-size: clamp(8px, .8vw, 11px); }
+  .panel-footer b { color: #e0ebf5; font-weight: 600; }
+  .side-hint { position: absolute; right: 4.5%; bottom: 9%; display: grid; gap: 11px; color: #e9edf1cc; font-size: clamp(9px, .95vw, 13px); text-align: right; text-shadow: 0 2px 10px #000; }
+  .side-hint span { display: flex; justify-content: flex-end; align-items: center; gap: 9px; }
+  .dock-panel { position: absolute; right: 4.2%; bottom: 6%; left: 4.2%; display: grid; grid-template-columns: minmax(220px, .95fr) minmax(440px, 1.3fr); gap: 22px; align-items: center; padding: clamp(17px, 2.4vw, 31px); border: 1px solid #d4e9fb22; border-radius: 16px; background: linear-gradient(110deg, #091525f5, #101d2beF); box-shadow: 0 20px 60px #0008; }
+  .dock-title { margin: 11px 0 6px; font-size: clamp(20px, 2.5vw, 33px); letter-spacing: -.025em; }
+  .dock-meta { color: #bdcbd8; font-size: clamp(9px, .95vw, 13px); }
+  .dock-next { margin-top: 10px; color: #9eafc0; font-size: clamp(9px, .95vw, 12px); }
+  .dock-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .dock-actions .action { min-height: clamp(44px, 6vh, 59px); }
+  .quick-panel { position: absolute; top: 18%; left: 4.2%; width: min(32%, 410px); min-width: 270px; padding: clamp(17px, 2.2vw, 30px); border: 1px solid #d5e9fb23; border-radius: 15px; background: #091522eF; box-shadow: 0 20px 60px #0008; backdrop-filter: blur(7px); }
+  .quick-panel .channel-line { margin-top: 16px; }
+  .quick-panel .program-title { margin-top: 17px; font-size: clamp(19px, 2.2vw, 29px); }
+  .quick-panel .action-list { gap: 5px; margin-top: 16px; }
+  .quick-panel .action { min-height: clamp(41px, 5vh, 50px); }
+  .quick-panel .program-copy { display: none; }
+  .quick-favorite { margin-top: 9px; color: #bdd1e3; font-size: clamp(9px, .9vw, 12px); }
+  .stage[data-variant="dock"] .stage-panel, .stage[data-variant="dock"] .quick-panel,
+  .stage[data-variant="focused"] .dock-panel, .stage[data-variant="focused"] .quick-panel,
+  .stage[data-variant="quick"] .stage-panel, .stage[data-variant="quick"] .dock-panel { display: none; }
+  .toast { position: absolute; z-index: 3; left: 50%; bottom: 5%; transform: translate(-50%, 12px); padding: 11px 17px; border: 1px solid #c8efff55; border-radius: 9px; background: #e8f7ff; color: #11273a; font-size: 13px; font-weight: 700; opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; }
+  .toast.visible { transform: translate(-50%, 0); opacity: 1; }
+  .stage-caption { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 3px 0; color: var(--muted); font-size: 12px; }
+  .stage-caption strong { color: #eff7fe; font-weight: 680; }
+  .help { color: #8597a9; text-align: right; }
+  .recommendation { display: grid; grid-template-columns: minmax(150px, .24fr) 1fr; gap: 22px; align-items: start; margin-top: 27px; padding: 20px 0 0; border-top: 1px solid #ffffff18; }
+  .recommendation h2 { margin: 0; color: var(--accent); font-size: 12px; letter-spacing: .13em; text-transform: uppercase; }
+  .recommendation p { max-width: 850px; margin: 0; color: #c0cedb; font-size: 13px; line-height: 1.62; }
+  .recommendation b { color: #f5f8fc; }
+  .scope { margin-top: 12px !important; color: #8394a7 !important; font-size: 11px !important; }
+  @media (max-width: 720px) {
+    .page { padding-top: 22px; }
+    header { display: block; }
+    .intro { margin-top: 12px; }
+    .stage-panel { top: 9%; bottom: 5%; left: 3%; width: 55%; min-width: 0; padding: 12px; }
+    .channel-line { gap: 8px; margin-top: 10px; }
+    .program-title { margin: 12px 0 6px; }
+    .program-copy { display: none; }
+    .on-now { margin-top: 11px; }
+    .action-list { gap: 4px; padding-top: 10px; }
+    .action { gap: 7px; min-height: 34px; padding: 0 8px; }
+    .action-hint, .keycap { display: none; }
+    .panel-footer { margin-top: 7px; }
+    .dock-panel { left: 3%; right: 3%; bottom: 4%; grid-template-columns: 1fr; gap: 10px; padding: 12px; }
+    .dock-next { display: none; }
+    .quick-panel { top: 12%; left: 3%; width: 51%; min-width: 0; padding: 12px; }
+    .recommendation { grid-template-columns: 1fr; gap: 9px; }
+    .help { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <div>
+      <div class="eyebrow">LunaTV · Playback menu concept</div>
+      <h1>Make channel options<br>feel obvious.</h1>
+    </div>
+    <p class="intro">A Roku-first menu refresh, using LunaTV’s existing dark navy and cyan palette. The picture stays on while the controls get out of its way.</p>
+  </header>
+
+  <nav class="switcher" aria-label="Design concepts">
+    <span class="switcher-label">Explore a layout</span>
+    <button class="variant-tab" type="button" role="tab" aria-selected="true" data-variant="focused">01 &nbsp; Focused panel <span aria-label="recommended">· recommended</span></button>
+    <button class="variant-tab" type="button" role="tab" aria-selected="false" data-variant="dock">02 &nbsp; Program dock</button>
+    <button class="variant-tab" type="button" role="tab" aria-selected="false" data-variant="quick">03 &nbsp; Quick list</button>
+  </nav>
+
+  <section class="stage-wrap" aria-label="Playback screen preview">
+    <div class="stage" id="stage" data-variant="focused" tabindex="0" aria-label="TV playback menu preview. Use up and down to move focus, Enter to preview an action, and the concept buttons to change layout.">
+      <div class="picture" aria-hidden="true"><div class="window one"></div><div class="window two"></div><div class="light"></div><div class="ticker">EVENING REPORT &nbsp; · &nbsp; LIVE</div></div>
+      <div class="scene-wash" aria-hidden="true"></div>
+      <div class="topline"><span class="brand">LUNATV</span><span class="live-chip">Live · 12.1</span></div>
+
+      <section class="stage-panel menu-panel" aria-label="Focused panel layout">
+        <div class="eyebrow">Now watching</div>
+        <div class="channel-line">
+          <div class="channel-mark" aria-hidden="true">12</div>
+          <div><div class="channel-name">Metro News</div><div class="channel-sub">12.1 &nbsp;·&nbsp; HD</div></div>
+        </div>
+        <h2 class="program-title">Evening<br>Report</h2>
+        <div class="program-meta">News · Ends 8:00 PM</div>
+        <p class="program-copy">The day’s top stories, local headlines, and a look at what’s ahead.</p>
+        <div class="on-now"><span>On now</span><span>7:18 – 8:00 PM</span></div>
+        <div class="progress" aria-hidden="true"><span></span></div>
+        <div class="action-list" role="group" aria-label="Channel actions">
+          <button class="action is-focused" type="button" data-message="Added to Favorites · design preview only"><span class="action-symbol" aria-hidden="true">☆</span><span class="action-main">Add to Favorites</span><span class="keycap" aria-hidden="true">✦</span></button>
+          <button class="action" type="button" data-message="Recording this program · design preview only"><span class="action-symbol" aria-hidden="true">●</span><span class="action-main">Record this program</span><span class="action-hint">Current airing</span></button>
+          <button class="action" type="button" data-message="Program details selected · design preview only"><span class="action-symbol" aria-hidden="true">i</span><span class="action-main">Program details</span><span class="keycap" aria-hidden="true">›</span></button>
+        </div>
+        <div class="panel-footer"><span><b>↑ ↓</b> Navigate &nbsp; <b>OK</b> Select</span><span><b>Back</b> Resume</span></div>
+      </section>
+
+      <section class="dock-panel menu-panel" aria-label="Program dock layout">
+        <div>
+          <div class="live-chip">Live · Metro News · 12.1</div>
+          <h2 class="dock-title">Evening Report</h2>
+          <div class="dock-meta">News &nbsp;·&nbsp; Ends 8:00 PM &nbsp;·&nbsp; On now 7:18 PM</div>
+          <div class="dock-next">Next: Local Focus &nbsp;·&nbsp; 8:00 PM</div>
+        </div>
+        <div class="dock-actions" role="group" aria-label="Channel actions">
+          <button class="action is-focused" type="button" data-message="Added to Favorites · design preview only"><span class="action-symbol" aria-hidden="true">☆</span><span class="action-main">Add to Favorites</span><span class="keycap" aria-hidden="true">✦</span></button>
+          <button class="action" type="button" data-message="Recording this program · design preview only"><span class="action-symbol" aria-hidden="true">●</span><span class="action-main">Record program</span></button>
+          <button class="action" type="button" data-message="Program details selected · design preview only"><span class="action-symbol" aria-hidden="true">i</span><span class="action-main">Program details</span></button>
+          <button class="action" type="button" data-message="Back to guide · design preview only"><span class="action-symbol" aria-hidden="true">⌂</span><span class="action-main">Back to guide</span></button>
+        </div>
+      </section>
+
+      <section class="quick-panel menu-panel" aria-label="Quick list layout">
+        <div class="eyebrow">12.1 &nbsp;·&nbsp; Metro News</div>
+        <div class="channel-line"><div class="channel-mark" aria-hidden="true">12</div><div><div class="live-chip">Live now</div><div class="channel-sub">Evening Report</div></div></div>
+        <div class="quick-favorite">News &nbsp;·&nbsp; Ends 8:00 PM</div>
+        <div class="action-list" role="group" aria-label="Channel actions">
+          <button class="action is-focused" type="button" data-message="Added to Favorites · design preview only"><span class="action-symbol" aria-hidden="true">☆</span><span class="action-main">Add to Favorites</span></button>
+          <button class="action" type="button" data-message="Recording this program · design preview only"><span class="action-symbol" aria-hidden="true">●</span><span class="action-main">Record program</span></button>
+          <button class="action" type="button" data-message="Program details selected · design preview only"><span class="action-symbol" aria-hidden="true">i</span><span class="action-main">Program details</span></button>
+        </div>
+      </section>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </div>
+    <div class="stage-caption"><span id="caption"><strong>01 · Focused panel</strong> — a clear, labeled home for channel actions.</span><span class="help">Focus the screen · ↑ / ↓ to move · OK to preview</span></div>
+  </section>
+
+  <section class="recommendation" aria-labelledby="recommendation-title">
+    <h2 id="recommendation-title">Design suggestion</h2>
+    <div>
+      <p><b>Recommend 01, the Focused panel.</b> It keeps the show and channel visible, groups Favorite / Record / Details as one predictable vertical list, and gives the Roku focus state enough room to read from the couch. Make <b>Back</b> the clear “resume watching” exit; keep channel surfing on Left / Right. Avoid putting seek/progress controls on this screen—live TV is a channel, not an on-demand video.</p>
+      <p class="scope">Concept only: the program, artwork, and action feedback are illustrative. No Roku code or playback behavior has been changed. Existing mappings today: OK shows/hides info, Down records, Star/Play toggles favorite, and Back exits to the guide.</p>
+    </div>
+  </section>
+</main>
+<script>
+(() => {
+  const stage = document.getElementById('stage');
+  const tabs = [...document.querySelectorAll('.variant-tab')];
+  const caption = document.getElementById('caption');
+  const toast = document.getElementById('toast');
+  const descriptions = {
+    focused: '<strong>01 · Focused panel</strong> — a clear, labeled home for channel actions.',
+    dock: '<strong>02 · Program dock</strong> — broad, low overlay; more picture stays visible.',
+    quick: '<strong>03 · Quick list</strong> — fast, compact access to the channel essentials.'
+  };
+  let toastTimer;
+  function setVariant(variant) {
+    stage.dataset.variant = variant;
+    tabs.forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.variant === variant)));
+    caption.innerHTML = descriptions[variant];
+    toast.classList.remove('visible');
+  }
+  tabs.forEach(tab => tab.addEventListener('click', () => setVariant(tab.dataset.variant)));
+  function currentActions() { return [...stage.querySelectorAll('.menu-panel:not([hidden]) .action')].filter(button => button.offsetParent !== null); }
+  function focusAction(button) {
+    currentActions().forEach(item => item.classList.toggle('is-focused', item === button));
+  }
+  function showMessage(message) {
+    toast.textContent = message;
+    toast.classList.add('visible');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('visible'), 1900);
+  }
+  stage.addEventListener('click', event => {
+    const button = event.target.closest('.action');
+    if (!button) return;
+    focusAction(button);
+    stage.focus({ preventScroll: true });
+    showMessage(button.dataset.message);
+  });
+  stage.addEventListener('keydown', event => {
+    if (!['ArrowUp', 'ArrowDown', 'Enter', ' '].includes(event.key)) return;
+    const actions = currentActions();
+    if (!actions.length) return;
+    event.preventDefault();
+    let index = actions.findIndex(button => button.classList.contains('is-focused'));
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      const step = event.key === 'ArrowDown' ? 1 : -1;
+      index = (index + step + actions.length) % actions.length;
+      focusAction(actions[index]);
+    } else {
+      if (index < 0) index = 0;
+      showMessage(actions[index].dataset.message);
+    }
+  });
+})();
+</script>
+</body>
+</html>
