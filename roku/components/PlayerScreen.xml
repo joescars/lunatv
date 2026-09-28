@@ -35,29 +35,41 @@
             translation="[0, 0]"
             width="1920"
             height="1080"
-            color="0x000000FF"
+            color="0x06101BFF"
             visible="false" />
 
-        <BusySpinner id="spinner"
-            translation="[910, 440]"
-            visible="false" />
-
+        <Group id="loadingCard" visible="false">
+            <Rectangle id="loadingGlow" translation="[0, 0]" width="1920" height="1080" color="0x10243A33" />
+            <Rectangle translation="[872, 242]" width="176" height="4" color="0x38BDF866" />
+            <Rectangle translation="[852, 272]" width="216" height="536" color="0x0B1929E8" />
+            <Rectangle translation="[852, 272]" width="216" height="4" color="0x38BDF8FF" />
+            <Label translation="[872, 300]" width="176" height="30" text="LUNATV  ·  LIVE" font="font:SmallBoldSystemFont" horizAlign="center" color="0x9CB0C4FF" />
+            <Group id="loadingChannelBadge" translation="[908, 368]" width="104" height="104" visible="false">
+                <Poster id="loadingChannelLogo" translation="[0, 0]" width="104" height="104" loadDisplayMode="scaleToFit" visible="false" />
+                <Rectangle id="loadingChannelBadgeFallback" width="104" height="104" color="0x132A40FF" />
+            </Group>
+            <Label id="loadingChannelName" translation="[872, 492]" width="176" height="54" horizAlign="center" vertAlign="center" font="font:MediumBoldSystemFont" color="0xFFFFFFFF" ellipsizeOnBoundary="true" />
+            <BusySpinner id="spinner" translation="[936, 574]" visible="false" />
+            <Label id="loadingSubtitle" translation="[400, 716]" width="1120" height="38" text="Getting live TV ready…" font="font:SmallSystemFont" horizAlign="center" color="0xAFC2D6FF" />
+            <Rectangle translation="[892, 782]" width="136" height="2" color="0x38BDF866" />
+        </Group>
         <Label id="statusLabel"
-            translation="[0, 580]"
-            width="1920"
-            height="80"
+            translation="[400, 650]"
+            width="1120"
+            height="70"
+            font="font:LargeBoldSystemFont"
             horizAlign="center"
             vertAlign="center"
             color="0xFFFFFFFF"
             visible="false" />
-
         <Label id="hintLabel"
-            translation="[0, 660]"
-            width="1920"
-            height="50"
+            translation="[400, 810]"
+            width="1120"
+            height="42"
+            font="font:SmallSystemFont"
             horizAlign="center"
             vertAlign="center"
-            color="0xAAAAAAFF"
+            color="0x8FA3B8FF"
             visible="false" />
 
         <!-- Brief, non-blocking channel/program confirmation after tuning. -->

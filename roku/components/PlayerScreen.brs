@@ -5,9 +5,16 @@ sub init()
     m.video = m.top.findNode("video")
     m.statsTimer = m.top.findNode("statsTimer")
     m.overlayBg = m.top.findNode("overlayBg")
+    m.loadingCard = m.top.findNode("loadingCard")
     m.spinner = m.top.findNode("spinner")
     m.statusLabel = m.top.findNode("statusLabel")
     m.hintLabel = m.top.findNode("hintLabel")
+    m.loadingGlow = m.top.findNode("loadingGlow")
+    m.loadingChannelBadge = m.top.findNode("loadingChannelBadge")
+    m.loadingChannelLogo = m.top.findNode("loadingChannelLogo")
+    m.loadingChannelBadgeFallback = m.top.findNode("loadingChannelBadgeFallback")
+    m.loadingChannelName = m.top.findNode("loadingChannelName")
+    m.loadingSubtitle = m.top.findNode("loadingSubtitle")
     m.statsPanel = m.top.findNode("statsPanel")
     m.statsTitle = m.top.findNode("statsTitle")
     m.statsBody = m.top.findNode("statsBody")
@@ -92,7 +99,7 @@ sub startTuning()
     end if
 
     refreshStatsContext()
-    showOverlay("Tuning " + m.top.channelName + "...", true)
+    showOverlay("Connecting to Live TV", true)
 
     task = CreateObject("roSGNode", "StreamStartTask")
     task.serverUrl = m.top.serverUrl
@@ -273,6 +280,7 @@ sub playStream()
     m.video.content = content
     m.video.visible = true
     m.video.control = "play"
+    hideOverlay()
 end sub
 
 ' --- channel confirmation --------------------------------------------------
@@ -475,24 +483,48 @@ sub showOverlay(text as string, showSpinner as boolean)
     hideChannelMenu()
     hideChannelNotice()
     m.overlayBg.visible = true
+    if m.loadingCard <> invalid then m.loadingCard.visible = showSpinner
     m.spinner.visible = showSpinner
     m.statusLabel.visible = true
     m.statusLabel.text = text
+    if m.loadingChannelName <> invalid
+        if m.top.channelName <> invalid and m.top.channelName <> ""
+            m.loadingChannelName.text = m.top.channelName
+        else
+            m.loadingChannelName.text = "Live TV"
+        end if
+    end if
+    hasLogo = (m.top.channelLogo <> invalid and m.top.channelLogo <> "")
+    if m.loadingChannelLogo <> invalid
+        if hasLogo then m.loadingChannelLogo.uri = m.top.channelLogo
+        m.loadingChannelLogo.visible = showSpinner and hasLogo
+    end if
+    if m.loadingChannelBadgeFallback <> invalid then m.loadingChannelBadgeFallback.visible = showSpinner and not hasLogo
+    if m.loadingChannelBadge <> invalid then m.loadingChannelBadge.visible = showSpinner
+    if m.loadingChannelName <> invalid then m.loadingChannelName.visible = showSpinner
+    if m.loadingSubtitle <> invalid then m.loadingSubtitle.visible = showSpinner
+
     m.hintLabel.visible = true
     if showSpinner
+        m.loadingSubtitle.text = "Getting live TV ready…"
         m.hintLabel.text = "Press Back to return to Guide"
+        m.hintLabel.color = "0x8FA3B8FF"
         m.failed = false
     else
         m.hintLabel.text = "Press OK to retry · Back to return to Guide"
+        m.hintLabel.color = "0xAAAAAAFF"
         m.failed = true
     end if
 end sub
 
 sub hideOverlay()
     m.overlayBg.visible = false
+    if m.loadingCard <> invalid then m.loadingCard.visible = false
     m.spinner.visible = false
     m.statusLabel.visible = false
     m.hintLabel.visible = false
+    if m.loadingChannelBadge <> invalid then m.loadingChannelBadge.visible = false
+    if m.loadingSubtitle <> invalid then m.loadingSubtitle.visible = false
 end sub
 
 ' --- diagnostics panel ---------------------------------------------------
