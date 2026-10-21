@@ -60,21 +60,56 @@ This repo also includes a sideloadable [Roku client](roku/) for watching live TV
 - Talks directly to your HDHomeRun's HTTP API (`discover.json`, `lineup.json`, `lineup.post`, `lineup_status.json`, `status.json`, plus the raw video stream on port `5004`)
 - Talks to Silicondust's cloud Guide API (`api.hdhomerun.com`) for program guide data
 
-## Running
+## Running with Docker Compose
 
-```bash
-docker compose up -d --build
+The Compose file pulls `ghcr.io/joescars/lunatv:latest`; Docker Compose reads `.env` from the same directory.
+
+`docker-compose.yml`:
+
+```yaml
+services:
+  hdhomerun-web:
+    image: ghcr.io/joescars/lunatv:latest
+    pull_policy: always
+    container_name: hdhomerun-web
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      HDHOMERUN_HOST: ${HDHOMERUN_HOST}
+      HDHOMERUN_PORT: ${HDHOMERUN_PORT:-80}
+      STREAM_DECODE_MODE: ${STREAM_DECODE_MODE:-sw}
+      WEBVTT_SIDECAR_MODE: ${WEBVTT_SIDECAR_MODE:-off}
+      SOURCE_CAPTION_PROBE: ${SOURCE_CAPTION_PROBE:-off}
+      RECORD_ENGINE_HOST: ${RECORD_ENGINE_HOST:-}
+      RECORD_ENGINE_PORT: ${RECORD_ENGINE_PORT:-37899}
+    devices:
+      - /dev/dri:/dev/dri
 ```
 
-The app listens on port `8080` by default — visit `http://<docker-host>:8080`.
+`.env`:
+
+```dotenv
+HDHOMERUN_HOST=192.168.1.100
+HDHOMERUN_PORT=80
+STREAM_DECODE_MODE=sw
+WEBVTT_SIDECAR_MODE=off
+SOURCE_CAPTION_PROBE=off
+RECORD_ENGINE_HOST=
+RECORD_ENGINE_PORT=37899
+```
+
+Set `HDHOMERUN_HOST` to your tuner's LAN IP, not its `.local` mDNS name. Start or update the app with:
+
+```bash
+docker compose up -d
+```
+
+The app listens on port `8080` by default — visit `http://<docker-host>:8080`. To use a fixed release, change the image tag from `latest` to a version such as `v1.2.3`.
 
 ### Configuration
 
-Configuration lives in a `.env` file (read automatically by `docker compose`). Copy the example and edit it:
-
-```bash
-cp .env.example .env
-```
+The `.env` values above configure the app. `HDHOMERUN_HOST` is required; use the tuner's LAN IP because containers on the default Docker bridge network cannot resolve mDNS `.local` names.
 
 | Variable          | Default          | Notes                                                                 |
 |-------------------|------------------|------------------------------------------------------------------------|
