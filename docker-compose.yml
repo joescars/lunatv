@@ -1,6 +1,7 @@
 services:
   hdhomerun-web:
-    build: .
+    image: ghcr.io/joescars/lunatv:latest
+    pull_policy: always
     container_name: hdhomerun-web
     restart: unless-stopped
     ports:
