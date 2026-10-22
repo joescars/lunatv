@@ -1,0 +1,2 @@
+# Generated third-party bundle contains meaningful whitespace in template literals.
+public/vendor/* -whitespace linguist-vendored

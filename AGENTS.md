@@ -4,7 +4,8 @@
 
 - Install/run locally: `npm ci && HDHOMERUN_HOST=<device-ip> npm start`. Node does not load `.env` itself; pass env vars explicitly.
 - Run the production-like stack: `docker compose up -d --build`.
-- There are no automated tests, lint, typecheck, formatter, or build scripts; verify targeted changes manually. Live playback additionally needs QSV-capable `ffmpeg` (the container provides Jellyfin ffmpeg and maps `/dev/dri`).
+- Browser/accessibility checks: `npm run test:ui` after `npx playwright install chromium`, or `CHROME_PATH=/usr/bin/google-chrome npm run test:ui`. The suite uses synthetic device data and never tunes a real device. Live playback still needs manual verification with QSV-capable `ffmpeg` (the container provides Jellyfin ffmpeg and maps `/dev/dri`).
+- Rebuild committed Material Web/Roboto assets after dependency or entry changes: `npm run build:ui`. Runtime and Docker do not require a frontend build. There are no lint, typecheck, or formatter scripts.
 - Docker reads `.env`; use LAN IPs for `HDHOMERUN_HOST` and `RECORD_ENGINE_HOST`, never `localhost` or `hdhomerun.local` from inside the container.
 - Trust `docker-compose.yml` over README defaults: Compose currently sets `STREAM_DECODE_MODE=sw` and `WEBVTT_SIDECAR_MODE=off`.
 - The Dockerfile configures Jellyfin's repository as `amd64`; native ARM builds fail at `jellyfin-ffmpeg7`. Run the Node app locally for non-playback UI work on ARM rather than changing deployment architecture incidentally.
@@ -19,7 +20,8 @@
 
 ## UI and device API gotchas
 
-- Top-level client views use `_client_header.ejs`; admin views use `_header.ejs`; both close through `_footer.ejs`. `_` view files can also be htmx response fragments.
+- Top-level client views use `_client_header.ejs`; admin views use `_header.ejs`; both share `_document_head.ejs`/`_app_nav.ejs` and close through `_footer.ejs`. `_` view files can also be htmx response fragments.
+- `DESIGN.md` and `public/css/style.css` define shared Material 3 tokens; `public/css/client.css` owns viewer patterns. Keep theme logic in `public/js/theme.js` and shared guide controls/overlay in `public/js/guide.js`.
 - In htmx URLs, percent-encode every dynamic query value. In particular, unencoded `+` becomes a space and breaks channel favorite updates.
 - Always request device `lineup.json` via the existing `getLineup()` path (`?show=all`); the bare endpoint omits channels. Favorite modes are mutually exclusive: `+`, `-`, or `x`.
 - The optional RECORD engine is external. Recording the current airing requires a POST rule add followed by `POST recording_events.post?sync`; do not replace the rule-add POST with GET.

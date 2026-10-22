@@ -8,7 +8,7 @@ This repo also includes a sideloadable [Roku client](roku/) for watching live TV
 
 ### Client (mobile-first, the default landing page)
 
-- **TV Guide** (`/`, also `/guide`) — live program guide (titles, times, episode info, synopses, artwork) via Silicondust's cloud Guide API, authenticated using the device's own `DeviceAuth` token. No subscription required. A large one-tap Watch button per channel starts playback immediately; tap the row itself to expand upcoming programs. A denser cable-style channel × time grid with a live "now" line is also available at `/guide/grid` for desktop use.
+- **TV Guide** (`/`, also `/guide`) — live program guide (titles, times, episode info, synopses, artwork) via Silicondust's cloud Guide API, authenticated using the device's own `DeviceAuth` token. No subscription required. Search channels or programs, filter favorites/hidden channels, and use the prominent Watch button per channel to start playback; tap the program details or chevron to expand upcoming programs. Current airings show time progress. A denser cable-style channel × time grid with a live "now" line is also available at `/guide/grid` for desktop use.
 - **Watch Live TV** — tapping Watch opens the video in a full-screen overlay right on the guide page, not a separate page load; closing it (✕, Escape, or the device Back gesture) drops you back exactly where you were, guide scroll position and filters intact. The HDHomeRun outputs raw MPEG2/AC3 that browsers can't decode natively, so the app transcodes it on the fly to H.264/AAC HLS using Intel Quick Sync (QSV) hardware acceleration, and plays it back with [hls.js](https://github.com/video-dev/hls.js) (native HLS on iOS Safari), including closed captions, with autoplay (falling back to muted autoplay if the browser blocks sound). Typically starts playing within a few seconds; tuner sessions are released automatically ~20s after you stop watching.
 - **DVR recordings** (`/recordings`) — browse completed recordings from an optional [HDHomeRun RECORD](https://info.hdhomerun.com/info/dvr) engine, play them in-browser through the same QSV H.264/AAC HLS pipeline as live TV, and permanently delete individual recordings after confirmation.
 - **Record this airing** — an optional "Record" button on the watch screen that schedules a one-off recording of whatever's currently playing. Requires a separately-run HDHomeRun RECORD engine (Silicondust's DVR software — not something this app manages or containers) reachable via `RECORD_ENGINE_HOST`; DVR controls are hidden entirely if that's not configured. See [Configuration](#configuration) below.
@@ -20,7 +20,7 @@ This repo also includes a sideloadable [Roku client](roku/) for watching live TV
 - **Channel Lineup** (`/admin/channels`) — full channel list including hidden and unsubscribed channels, with per-channel signal strength/quality and codec info. Toggle filters for Favorites, HD, and Show Hidden, plus one-tap buttons to favorite or hide any channel (synced back to the device itself).
 - **Detect Channels** (`/admin/scan`) — start or abort a channel scan, with a source selector (e.g. Antenna/Cable) and live progress.
 - **System Status** (`/admin/status`) — per-tuner status: currently tuned channel, signal strength/quality meters, and network rate (Mbit/s), auto-refreshing.
-- **Light/dark mode** toggle in the admin navbar, remembered across visits. (The client pages are dark-only, matching the Roku app's branding.)
+- **Shared light/dark mode** across viewer and admin pages, initially following your device preference and remembered after you choose a theme. Both use a responsive Material Design 3 shell; Roku retains its existing interface.
 
 ### Roku
 
@@ -38,6 +38,8 @@ This repo also includes a sideloadable [Roku client](roku/) for watching live TV
 
 ## Screenshots
 
+The browser screenshots below show the previous theme. The current browser design is documented in [DESIGN.md](DESIGN.md); UI tests produce local synthetic-data screenshots under `.impeccable/review/`.
+
 | TV Guide | Watching |
 |---|---|
 | ![Dark-mode TV Guide](docs/screen-tv-guide.jpeg) | ![Dark-mode live TV playback](docs/screen-watch.jpeg) |
@@ -54,7 +56,8 @@ This repo also includes a sideloadable [Roku client](roku/) for watching live TV
 
 - Node.js + Express, server-rendered with EJS (no SPA build step)
 - [htmx](https://htmx.org/) for the small bits of live-updating UI (scan progress, tuner status, favorite/hide toggles)
-- [Bootstrap 5](https://getbootstrap.com/) for styling, loaded via CDN, with a light/dark theme toggle
+- [Material Design 3](https://m3.material.io/) with Google's [Material Web](https://github.com/material-components/material-web) buttons and icon buttons, self-hosted Roboto, and a shared light/dark token system
+- [Bootstrap 5](https://getbootstrap.com/) layout/collapse utilities and Bootstrap Icons via CDN; native forms and filter chips share the Material tokens
 - [hls.js](https://github.com/video-dev/hls.js) for in-browser playback of the transcoded live stream
 - [jellyfin-ffmpeg](https://github.com/jellyfin/jellyfin-ffmpeg) for QSV-accelerated transcoding (bundles its own current Intel media driver — see [Hardware transcoding](#hardware-transcoding-live-tv) below)
 - Talks directly to your HDHomeRun's HTTP API (`discover.json`, `lineup.json`, `lineup.post`, `lineup_status.json`, `status.json`, plus the raw video stream on port `5004`)
@@ -167,6 +170,26 @@ views/                 EJS templates (server-rendered)
 public/                Static assets (CSS, favicon)
 roku/                  Roku (BrightScript/SceneGraph) client - see roku/README.md
 ```
+
+### UI development and checks
+
+The Material Web bundle and Roboto font are checked into `public/`; running the app or building its container does not require frontend compilation. After changing `frontend/material.js` or upgrading its packages, regenerate those assets:
+
+```bash
+npm ci
+npm run build:ui
+```
+
+Run the browser/accessibility regression suite without a tuner or RECORD engine:
+
+```bash
+npx playwright install chromium
+npm run test:ui
+# Alternatively, use an installed Chrome:
+CHROME_PATH=/usr/bin/google-chrome npm run test:ui
+```
+
+Tests cover desktop/phone light and dark layouts, accessibility checks, guide search/filters, overlay dismissal and focus restoration, theme persistence, favorite updates, scan controls, and empty/error states. Data is synthetic and stream adapters are stubbed; these tests never tune a device and do not verify real decoding, captions, or hardware acceleration. Screenshots are local-only under `.impeccable/review/` (override with `UI_SCREENSHOTS`).
 
 ### JSON API
 

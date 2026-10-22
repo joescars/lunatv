@@ -1,59 +1,56 @@
 <% if (error) { %>
-  <div class="alert alert-danger">Could not load guide data: <%= error %></div>
+  <div class="guide-empty" role="alert">
+    <h2>Your guide couldn’t load</h2>
+    <p><%= error %></p>
+    <button type="button" class="btn btn-primary" hx-get="/guide/fragment" hx-target="#guide-content" hx-swap="innerHTML">Try again</button>
+    <a href="/admin" class="btn btn-outline-secondary">Check device</a>
+  </div>
 <% } else if (!channels.length) { %>
-  <div class="alert alert-secondary">No guide data available.</div>
+  <div class="guide-empty">
+    <h2>No channels available</h2>
+    <p>Check your tuner connection or scan for channels in device administration.</p>
+    <a href="/admin/scan" class="btn btn-primary">Scan channels</a>
+  </div>
 <% } else { %>
   <% channels.forEach(function(ch, i) {
        var airings = (ch.Guide || []).filter(function(a) { return a.EndTime > now; }).slice(0, 6);
        var current = airings.find(function(a) { return a.StartTime <= now && now < a.EndTime; });
+       var next = airings.find(function(a) { return a.StartTime > now; });
+       var search = [ch.GuideNumber, ch.GuideName].concat(airings.map(function(a) { return a.Title; })).join(' ');
   %>
-    <div class="guide-channel guide-item"
-         data-favorite="<%= ch.Favorite ? 1 : 0 %>"
-         data-hidden="<%= ch.Hidden ? 1 : 0 %>">
+    <section class="guide-channel guide-item" data-favorite="<%= ch.Favorite ? 1 : 0 %>" data-hidden="<%= ch.Hidden ? 1 : 0 %>" data-search="<%= search %>">
       <div class="guide-channel-header">
         <span class="guide-channel-num"><%= ch.GuideNumber %></span>
-        <% if (current && current.ImageURL) { %>
-          <img src="<%= current.ImageURL %>" alt="" class="guide-channel-thumb flex-shrink-0" loading="lazy" data-bs-toggle="collapse" data-bs-target="#guide-<%= i %>" role="button" aria-expanded="false" aria-controls="guide-<%= i %>">
-        <% } %>
-        <div class="guide-channel-info" data-bs-toggle="collapse" data-bs-target="#guide-<%= i %>" role="button" aria-expanded="false" aria-controls="guide-<%= i %>">
-          <div class="guide-channel-name text-truncate"><%= ch.GuideName %></div>
+        <% if (current && current.ImageURL) { %><img src="<%= current.ImageURL %>" alt="" class="guide-channel-thumb" loading="lazy"><% } %>
+        <button type="button" class="guide-channel-info" data-bs-toggle="collapse" data-bs-target="#guide-<%= i %>" aria-expanded="false" aria-controls="guide-<%= i %>">
+          <span class="guide-channel-name"><%= ch.GuideName %><% if (ch.Favorite) { %> <i class="bi bi-star-fill" aria-label="Favorite"></i><% } %></span>
+          <span class="guide-channel-now"><%= current ? current.Title : 'No current program info' %></span>
           <% if (current) { %>
-            <div class="guide-channel-now"><%= current.Title %></div>
-          <% } else { %>
-            <div class="guide-channel-now text-body-secondary">No current program info</div>
+            <span class="airing-time guide-airing-meta" data-start="<%= current.StartTime %>" data-end="<%= current.EndTime %>"></span>
+            <span class="airing-progress" aria-hidden="true" data-start="<%= current.StartTime %>" data-end="<%= current.EndTime %>"><span></span></span>
           <% } %>
-        </div>
-        <button type="button" class="btn-watch" onclick="watchChannel('<%= ch.GuideNumber %>')" title="Watch live" aria-label="Watch <%= ch.GuideName %> live">
-          <i class="bi bi-play-fill"></i>
+          <span class="visually-hidden"> — Show upcoming programs</span>
         </button>
-        <button type="button" class="guide-expand-btn" data-bs-toggle="collapse" data-bs-target="#guide-<%= i %>" aria-expanded="false" aria-controls="guide-<%= i %>" aria-label="Show upcoming programs for <%= ch.GuideName %>">
-          <i class="bi bi-chevron-down"></i>
-        </button>
+        <% if (next) { %>
+          <div class="guide-next"><span class="airing-start" data-start="<%= next.StartTime %>"></span><strong><%= next.Title %></strong></div>
+        <% } %>
+        <md-filled-button class="btn-watch" onclick="watchChannel(<%= JSON.stringify(ch.GuideNumber) %>)" aria-label="Watch <%= ch.GuideName %> live"><i class="bi bi-play-fill" slot="icon" aria-hidden="true"></i>Watch</md-filled-button>
+        <button type="button" class="guide-expand-btn" data-bs-toggle="collapse" data-bs-target="#guide-<%= i %>" aria-expanded="false" aria-controls="guide-<%= i %>" aria-label="Show upcoming programs for <%= ch.GuideName %>"><i class="bi bi-chevron-down" aria-hidden="true"></i></button>
       </div>
       <div id="guide-<%= i %>" class="collapse guide-channel-body">
-        <% if (!airings.length) { %>
-          <p class="text-body-secondary small mb-0">No upcoming guide data for this channel.</p>
-        <% } %>
+        <h2>On <%= ch.GuideName %></h2>
+        <% if (!airings.length) { %><p class="text-body-secondary mb-0">No upcoming program information for this channel. You can still watch live.</p><% } %>
         <% airings.forEach(function(a) { %>
-          <div class="d-flex gap-2 mb-3">
-            <% if (a.ImageURL) { %>
-              <img src="<%= a.ImageURL %>" alt="" width="60" height="90" class="rounded flex-shrink-0" style="object-fit: cover;" loading="lazy">
-            <% } %>
-            <div class="flex-grow-1 min-width-0">
-              <div class="d-flex align-items-center gap-2">
-                <% if (a.StartTime <= now && now < a.EndTime) { %><span class="guide-badge-now">NOW</span><% } %>
-                <strong><%= a.Title %></strong>
-              </div>
-              <div class="small text-body-secondary">
-                <span class="airing-time" data-start="<%= a.StartTime %>" data-end="<%= a.EndTime %>"></span>
-                <% if (a.EpisodeNumber) { %> · <%= a.EpisodeNumber %><% } %>
-                <% if (a.EpisodeTitle) { %> · <%= a.EpisodeTitle %><% } %>
-              </div>
-              <% if (a.Synopsis) { %><div class="small mt-1"><%= a.Synopsis %></div><% } %>
+          <div class="guide-airing">
+            <% if (a.ImageURL) { %><img src="<%= a.ImageURL %>" alt="" loading="lazy"><% } %>
+            <div class="min-width-0">
+              <div class="d-flex align-items-center flex-wrap gap-2"><strong><%= a.Title %></strong><% if (a.StartTime <= now && now < a.EndTime) { %><span class="guide-badge-now">On now</span><% } %></div>
+              <div class="small text-body-secondary mt-1"><span class="airing-time" data-start="<%= a.StartTime %>" data-end="<%= a.EndTime %>"></span><% if (a.EpisodeNumber) { %> · <%= a.EpisodeNumber %><% } %><% if (a.EpisodeTitle) { %> · <%= a.EpisodeTitle %><% } %></div>
+              <% if (a.Synopsis) { %><p class="small mt-2 mb-0"><%= a.Synopsis %></p><% } %>
             </div>
           </div>
         <% }); %>
       </div>
-    </div>
+    </section>
   <% }); %>
 <% } %>

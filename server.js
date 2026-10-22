@@ -31,6 +31,10 @@ app.use(express.urlencoded({ extended: false }));
 
 app.locals.deviceSystemLogUrl = `http://${hdhr.HOST}/log.html`;
 app.locals.assetVersion = ASSET_VERSION;
+app.use((req, res, next) => {
+  res.locals.currentPath = req.path;
+  next();
+});
 
 // The mobile guide (guideRoutes) is the primary client experience, mounted
 // at the root. Device-setup/management pages live under /admin - they're

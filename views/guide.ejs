@@ -1,168 +1,26 @@
-<%- include('_client_header', { title: 'TV Guide' }) %>
+<%- include('_client_header', { title: 'Live TV' }) %>
 
-<div class="d-flex align-items-center flex-wrap gap-2 mb-3">
-  <div class="btn-group flex-wrap" role="group" aria-label="Guide filters">
-    <input type="checkbox" class="btn-check" id="guide-filter-favorites" autocomplete="off">
-    <label class="btn btn-outline-warning btn-sm guide-filter-pill" for="guide-filter-favorites"><i class="bi bi-star-fill me-1"></i>Favorites</label>
-
-    <input type="checkbox" class="btn-check" id="guide-filter-show-hidden" autocomplete="off">
-    <label class="btn btn-outline-secondary btn-sm guide-filter-pill" for="guide-filter-show-hidden">Show Hidden</label>
+<div class="page-heading">
+  <div>
+    <h1>Live TV</h1>
+    <p class="page-description">Browse channels. Watch live.</p>
   </div>
-  <span class="text-body-secondary small ms-auto" id="guide-channel-count"></span>
-  <a href="/recordings" class="icon-link" title="Recordings" aria-label="Recordings"><i class="bi bi-collection-play"></i></a>
-  <a href="/guide/grid" class="icon-link" title="Grid view" aria-label="Grid view"><i class="bi bi-grid-3x3-gap"></i></a>
+  <nav class="view-switch" aria-label="Guide view">
+    <a href="/guide" aria-current="page"><i class="bi bi-list-ul" aria-hidden="true"></i>List</a>
+    <a href="/guide/grid"><i class="bi bi-grid-3x3" aria-hidden="true"></i>Grid</a>
+  </nav>
 </div>
 
-<div id="guide-content"
-     hx-get="/guide/fragment"
-     hx-trigger="load"
-     hx-swap="innerHTML">
-  <div class="alert alert-secondary mb-0 d-flex align-items-center gap-2">
-    <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
-    <span>Loading guide data…</span>
-  </div>
+<%- include('_guide_toolbar') %>
+<div id="guide-content" hx-get="/guide/fragment" hx-trigger="load" hx-swap="innerHTML" aria-label="Channels">
+  <div class="guide-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading your channels…</div>
 </div>
-<div id="guide-filter-empty" class="alert alert-secondary mt-2" style="display:none;">
-  No channels match the current filters.
+<div id="guide-filter-empty" class="guide-empty mt-3" hidden>
+  <h2>No matching channels</h2>
+  <p>Try another search or clear your filters to see all available channels.</p>
+  <md-outlined-button id="guide-clear-filters">Clear filters</md-outlined-button>
 </div>
 
-<!-- Full-screen in-page watch overlay - tapping a channel's Watch button
-     opens this instead of navigating to /watch/:channel as a separate
-     page, so the guide (scroll position, filters) stays intact underneath.
-     The iframe just loads the existing /watch page with ?embedded=1,
-     which renders full-bleed with no header chrome - see watch.ejs. -->
-<div id="watch-overlay" class="watch-overlay" style="display:none;">
-  <button type="button" id="watch-overlay-close" class="watch-overlay-close" title="Close" aria-label="Close video">
-    <i class="bi bi-x-lg"></i>
-  </button>
-  <iframe id="watch-overlay-frame" class="watch-overlay-frame" allow="autoplay; fullscreen" allowfullscreen title="Live video player"></iframe>
-</div>
-
-<script>
-  var guideFavoritesCheck = document.getElementById('guide-filter-favorites');
-  var guideShowHiddenCheck = document.getElementById('guide-filter-show-hidden');
-  var guideCountEl = document.getElementById('guide-channel-count');
-  var guideEmptyEl = document.getElementById('guide-filter-empty');
-
-  function hydrateAiringTimes(root) {
-    (root || document).querySelectorAll('.airing-time').forEach(function (el) {
-      var start = new Date(parseInt(el.dataset.start, 10) * 1000);
-      var end = new Date(parseInt(el.dataset.end, 10) * 1000);
-      var opts = { hour: 'numeric', minute: '2-digit' };
-      el.textContent = start.toLocaleTimeString([], opts) + ' – ' + end.toLocaleTimeString([], opts);
-    });
-  }
-
-  function applyGuideFilters() {
-    if (!guideFavoritesCheck || !guideShowHiddenCheck || !guideCountEl) return;
-    var items = document.querySelectorAll('#guide-content .guide-item');
-    var visible = 0;
-    items.forEach(function (item) {
-      var isFavorite = item.dataset.favorite === '1';
-      var isHidden = item.dataset.hidden === '1';
-      var show = (!guideFavoritesCheck.checked || isFavorite) && (guideShowHiddenCheck.checked || !isHidden);
-      item.style.display = show ? '' : 'none';
-      if (show) visible += 1;
-    });
-
-    guideCountEl.textContent = visible + ' channel' + (visible === 1 ? '' : 's');
-    if (guideEmptyEl) {
-      guideEmptyEl.style.display = (items.length > 0 && visible === 0) ? '' : 'none';
-    }
-  }
-
-  function chooseQualityProfile() {
-    var connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-    if (!connection) return 'medium';
-    if (connection.saveData) return 'low';
-    var effectiveType = connection.effectiveType || '';
-    if (effectiveType === 'slow-2g' || effectiveType === '2g' || effectiveType === '3g') return 'low';
-    if (typeof connection.downlink === 'number' && connection.downlink >= 8) return 'high';
-    if (typeof connection.downlink === 'number' && connection.downlink <= 2.5) return 'low';
-    return 'medium';
-  }
-
-  // Opens the video in a full-screen overlay in-page (iframe loading the
-  // existing /watch page with ?embedded=1) instead of navigating away, so
-  // the guide stays loaded underneath - closing just returns to exactly
-  // where you were, no reload/re-fetch. pushState so the device Back
-  // gesture closes the video instead of leaving the app entirely.
-  var watchOverlay = document.getElementById('watch-overlay');
-  var watchOverlayFrame = document.getElementById('watch-overlay-frame');
-  var watchOverlayClose = document.getElementById('watch-overlay-close');
-
-  // Move the overlay to be a direct child of <body> rather than nested
-  // inside <main class="container">. A position:fixed element positions
-  // relative to the viewport UNLESS an ancestor establishes a new
-  // containing block (any ancestor with a transform/filter/will-change/
-  // perspective, etc.) - if that's happening here, the overlay would
-  // render relative to that ancestor instead of the screen, potentially
-  // ending up sized-to-nothing or off-screen. Re-parenting to <body>
-  // sidesteps the whole category of bug regardless of which ancestor (if
-  // any) is responsible.
-  if (watchOverlay && watchOverlay.parentNode !== document.body) {
-    document.body.appendChild(watchOverlay);
-  }
-
-  function watchChannel(channel) {
-    var profile = chooseQualityProfile();
-    var encodedChannel = encodeURIComponent(channel);
-    var destination = '/watch/' + encodedChannel + '?quality=' + encodeURIComponent(profile) + '&embedded=1';
-    var startUrl = '/stream/' + encodedChannel + '/h264/' + encodeURIComponent(profile) + '/start';
-
-    // Prewarm in parallel with the iframe load itself - no artificial
-    // delay needed here (unlike the old full-navigation version) since
-    // loading the iframe doesn't cancel this fetch.
-    fetch(startUrl, { method: 'POST' }).catch(function () {});
-
-    watchOverlayFrame.src = destination;
-    watchOverlay.style.display = 'block';
-    document.body.style.overflow = 'hidden';
-    history.pushState({ lunatvWatchOverlay: true }, '', window.location.pathname + window.location.search);
-  }
-
-  function closeWatchOverlay() {
-    if (watchOverlay.style.display === 'none') return;
-    watchOverlay.style.display = 'none';
-    watchOverlayFrame.src = 'about:blank'; // stop playback / release the tuner promptly
-    document.body.style.overflow = '';
-    if (history.state && history.state.lunatvWatchOverlay) {
-      history.back();
-    }
-  }
-
-  watchOverlayClose.addEventListener('click', closeWatchOverlay);
-
-  window.addEventListener('popstate', function () {
-    if (watchOverlay.style.display !== 'none') {
-      watchOverlay.style.display = 'none';
-      watchOverlayFrame.src = 'about:blank';
-      document.body.style.overflow = '';
-    }
-  });
-
-  document.addEventListener('keydown', function (event) {
-    if (event.key === 'Escape') closeWatchOverlay();
-  });
-
-  if (guideShowHiddenCheck) {
-    guideShowHiddenCheck.checked = false;
-  }
-
-  hydrateAiringTimes(document);
-  applyGuideFilters();
-
-  document.body.addEventListener('htmx:afterSwap', function (event) {
-    if (event.target && event.target.id === 'guide-content') {
-      hydrateAiringTimes(event.target);
-      applyGuideFilters();
-    }
-  });
-
-  [guideFavoritesCheck, guideShowHiddenCheck].forEach(function (el) {
-    if (!el) return;
-    el.addEventListener('change', applyGuideFilters);
-  });
-</script>
-
+<%- include('_watch_overlay') %>
+<script src="/js/guide.js?v=<%= assetVersion %>" defer></script>
 <%- include('_footer') %>

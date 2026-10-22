@@ -5,3 +5,9 @@ npm-debug.log
 .env
 .env.*
 !.env.example
+
+# Local Impeccable review output and decision/runtime artifacts
+.impeccable/review/
+.impeccable/mocks/
+.impeccable/questions/
+.impeccable/live/

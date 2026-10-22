@@ -25,12 +25,14 @@
   <span class="channel-actions">
     <button type="button" class="icon-btn <%= ch.Favorite ? 'is-active icon-btn-fav' : '' %>"
             title="<%= ch.Favorite ? 'Unfavorite' : 'Favorite' %>"
+            aria-label="<%= ch.Favorite ? 'Remove ' : 'Add ' %><%= ch.GuideName %><%= ch.Favorite ? ' from favorites' : ' to favorites' %>" aria-pressed="<%= !!ch.Favorite %>" hx-disabled-elt="this"
             hx-post="/admin/channels/flag?guide=<%= encodeURIComponent(ch.GuideNumber) %>&mode=<%= encodeURIComponent(ch.Favorite ? '-' : '+') %>"
             hx-target="#channel-<%= ch.GuideNumber.replace('.', '-') %>" hx-swap="outerHTML">
       <i class="bi <%= ch.Favorite ? 'bi-star-fill' : 'bi-star' %>"></i>
     </button>
     <button type="button" class="icon-btn <%= ch.Enabled === 0 ? 'is-active icon-btn-hidden' : '' %>"
             title="<%= ch.Enabled === 0 ? 'Unhide' : 'Hide' %>"
+            aria-label="<%= ch.Enabled === 0 ? 'Show ' : 'Hide ' %><%= ch.GuideName %>" aria-pressed="<%= ch.Enabled === 0 %>" hx-disabled-elt="this"
             hx-post="/admin/channels/flag?guide=<%= encodeURIComponent(ch.GuideNumber) %>&mode=<%= encodeURIComponent(ch.Enabled === 0 ? '-' : 'x') %>"
             hx-target="#channel-<%= ch.GuideNumber.replace('.', '-') %>" hx-swap="outerHTML">
       <i class="bi <%= ch.Enabled === 0 ? 'bi-eye-slash-fill' : 'bi-eye-slash' %>"></i>

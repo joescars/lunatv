@@ -1,14 +1,14 @@
 <%- include('_header', { title: 'Channels' }) %>
 
-<h1 class="h4 mb-3">Channel Lineup</h1>
+<div class="page-heading"><div><h1>Channel lineup</h1><p class="page-description">Choose favorites and control which channels appear in your guide.</p></div></div>
 
 <% if (error) { %>
-  <div class="alert alert-danger">Could not load channel lineup: <%= error %></div>
+  <div class="alert alert-danger" role="alert">Could not load channel lineup: <%= error %></div>
 <% } else if (!channels.length) { %>
   <div class="alert alert-secondary">No channels found. Try running a <a href="/admin/scan">channel scan</a>.</div>
 <% } else { %>
   <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
-    <div class="btn-group flex-wrap" role="group" aria-label="Channel filters">
+    <div class="filter-chip-group" role="group" aria-label="Channel filters">
       <input type="checkbox" class="btn-check" id="filter-favorites" autocomplete="off">
       <label class="btn btn-outline-warning btn-sm" for="filter-favorites"><i class="bi bi-star-fill me-1"></i>Favorites</label>
 
@@ -18,57 +18,14 @@
       <input type="checkbox" class="btn-check" id="filter-hidden" autocomplete="off">
       <label class="btn btn-outline-secondary btn-sm" for="filter-hidden">Show Hidden</label>
     </div>
-    <span class="text-body-secondary small ms-auto" id="channel-count"><%= totalChannels %> channel<%= totalChannels === 1 ? '' : 's' %></span>
+    <span class="text-body-secondary small ms-auto" id="channel-count" role="status"><%= totalChannels %> channel<%= totalChannels === 1 ? '' : 's' %></span>
   </div>
 
   <div class="channel-list" id="channel-list">
     <%- include('_channel_rows', { channels, nextOffset, totalChannels, limit: batchSize }) %>
   </div>
+  <div id="channel-filter-empty" class="guide-empty mt-3" hidden><h2>No matching channels</h2><p>Clear a filter to see more channels.</p><button type="button" id="channel-clear-filters" class="btn btn-outline-secondary">Clear filters</button></div>
 <% } %>
-
-<style>
-  .channel-list { border: 1px solid var(--bs-border-color); border-radius: 8px; overflow: hidden; }
-  .channel-row {
-    display: flex; align-items: center; gap: .6rem;
-    padding: .5rem .75rem;
-    border-bottom: 1px solid var(--bs-border-color);
-    min-width: 0;
-  }
-  .channel-list .channel-row:last-child { border-bottom: none; }
-  .channel-row:hover { background: var(--bs-tertiary-bg); }
-  .channel-num {
-    flex: 0 0 auto; min-width: 2.75rem; text-align: center;
-    font-variant-numeric: tabular-nums; font-weight: 600; font-size: .8rem;
-    color: var(--bs-secondary-color);
-  }
-  .channel-name { flex: 1 1 auto; min-width: 0; font-weight: 500; }
-  .channel-tags { flex: 0 1 auto; display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
-  .channel-tag {
-    font-size: .72rem; font-weight: 600; letter-spacing: .02em;
-    color: var(--bs-secondary-color); white-space: nowrap;
-  }
-  .channel-tag-hd, .channel-tag-signal {
-    padding: .1rem .4rem; border-radius: 4px; background: var(--bs-tertiary-bg);
-  }
-  .channel-tag-drm {
-    padding: .1rem .4rem; border-radius: 4px;
-    color: var(--bs-danger-text-emphasis, #dc3545); background: var(--bs-danger-bg-subtle, rgba(220,53,69,.12));
-  }
-  .channel-tag-codec { font-weight: 400; display: none; }
-  .channel-tag-signal i { margin-right: .25rem; }
-  .channel-actions { flex: 0 0 auto; display: flex; gap: .15rem; }
-  .icon-btn {
-    width: 2rem; height: 2rem; display: inline-flex; align-items: center; justify-content: center;
-    border: none; border-radius: 6px; background: transparent; color: var(--bs-secondary-color);
-    cursor: pointer; font-size: .95rem; transition: background-color .1s ease, color .1s ease;
-  }
-  .icon-btn:hover { background: var(--bs-secondary-bg); color: var(--bs-body-color); }
-  .icon-btn-fav.is-active { color: #f5b301; }
-  .icon-btn-hidden.is-active { color: var(--bs-danger); }
-  @media (min-width: 576px) {
-    .channel-tag-codec { display: inline; }
-  }
-</style>
 
 <script>
   (function () {
@@ -91,10 +48,16 @@
         if (show) visible++;
       });
       countEl.textContent = visible + ' channel' + (visible === 1 ? '' : 's');
+      document.getElementById('channel-filter-empty').hidden = visible > 0 || !rows.length;
     }
 
     [favCheck, hdCheck, hiddenCheck].forEach(function (el) {
       el.addEventListener('change', applyFilters);
+    });
+    document.getElementById('channel-clear-filters').addEventListener('click', function () {
+      favCheck.checked = false; hdCheck.checked = false; hiddenCheck.checked = false;
+      applyFilters();
+      favCheck.focus();
     });
     list.addEventListener('htmx:afterSwap', applyFilters);
     applyFilters();

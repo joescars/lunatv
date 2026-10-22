@@ -1,13 +1,14 @@
 <div id="tuner-status" hx-get="/admin/status/fragment" hx-trigger="load delay:3s" hx-swap="outerHTML">
   <% if (error) { %>
-    <div class="alert alert-danger">Could not read tuner status: <%= error %></div>
+    <div class="alert alert-danger" role="alert">Could not read tuner status: <%= error %></div>
   <% } else if (!tuners.length) { %>
     <div class="alert alert-secondary">No tuners currently active.</div>
   <% } else { %>
+    <div class="tuner-grid">
     <% tuners.forEach(function(t, i) { %>
       <div class="card bg-body-tertiary mb-3">
         <div class="card-body">
-          <h3 class="h6 card-title"><%= t.Resource || ('Tuner ' + i) %></h3>
+          <div class="tuner-heading"><h2 class="h6 card-title mb-0"><%= t.Resource || ('Tuner ' + i) %></h2><span class="status-badge"><%= t.VctNumber ? 'In use' : 'Idle' %></span></div>
           <% if (t.VctNumber) { %>
             <p class="mb-2">Tuned: <strong><%= t.VctNumber %> <%= t.VctName || '' %></strong></p>
           <% } else { %>
@@ -16,7 +17,7 @@
           <% if (typeof t.SignalStrengthPercent !== 'undefined') { %>
             <div class="d-flex align-items-center gap-2 small mb-1">
               <span style="width: 6rem;">Signal</span>
-              <div class="progress flex-grow-1" role="progressbar">
+              <div class="progress flex-grow-1" role="progressbar" aria-label="Signal strength" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<%= t.SignalStrengthPercent %>">
                 <div class="progress-bar" style="width: <%= t.SignalStrengthPercent %>%"></div>
               </div>
               <span style="width: 3rem;" class="text-end"><%= t.SignalStrengthPercent %>%</span>
@@ -25,7 +26,7 @@
           <% if (typeof t.SignalQualityPercent !== 'undefined') { %>
             <div class="d-flex align-items-center gap-2 small mb-1">
               <span style="width: 6rem;">Quality</span>
-              <div class="progress flex-grow-1" role="progressbar">
+              <div class="progress flex-grow-1" role="progressbar" aria-label="Signal quality" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<%= t.SignalQualityPercent %>">
                 <div class="progress-bar" style="width: <%= t.SignalQualityPercent %>%"></div>
               </div>
               <span style="width: 3rem;" class="text-end"><%= t.SignalQualityPercent %>%</span>
@@ -34,7 +35,7 @@
           <% if (typeof t.SymbolQualityPercent !== 'undefined') { %>
             <div class="d-flex align-items-center gap-2 small mb-1">
               <span style="width: 6rem;">Symbol Q.</span>
-              <div class="progress flex-grow-1" role="progressbar">
+              <div class="progress flex-grow-1" role="progressbar" aria-label="Symbol quality" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<%= t.SymbolQualityPercent %>">
                 <div class="progress-bar" style="width: <%= t.SymbolQualityPercent %>%"></div>
               </div>
               <span style="width: 3rem;" class="text-end"><%= t.SymbolQualityPercent %>%</span>
@@ -44,5 +45,6 @@
         </div>
       </div>
     <% }); %>
+    </div>
   <% } %>
 </div>
