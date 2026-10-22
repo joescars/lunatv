@@ -4,8 +4,8 @@
   <a href="/recordings" class="icon-link me-2" title="Back to recordings" aria-label="Back to recordings"><i class="bi bi-arrow-left"></i></a>
   <h1 class="h6 mb-0 flex-grow-1 text-truncate"><%= recording.EpisodeTitle || recording.Title %></h1>
 </div>
-<div class="ratio ratio-16x9 bg-black rounded overflow-hidden mb-3"><video id="player" controls autoplay playsinline></video></div>
-<div id="player-status" class="text-body-secondary small">Preparing recording…</div>
+<div class="ratio ratio-16x9 player-panel mb-3"><video id="player" controls autoplay playsinline></video></div>
+<div id="player-status" class="text-body-secondary small" role="status">Preparing recording…</div>
 <% if (recording.Synopsis) { %><p class="small text-body-secondary mt-3 mb-0"><%= recording.Synopsis %></p><% } %>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js?v=<%= assetVersion %>"></script>

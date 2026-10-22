@@ -1,0 +1,606 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-22T19:15:40.066Z",
+  "title": "Design System: LunaTV",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "primary",
+        "tonalRamp": [
+          "#140e23",
+          "#251a41",
+          "#36255e",
+          "#47317c",
+          "#644f99",
+          "#8f80b5",
+          "#bab0d1",
+          "#e5e1ee"
+        ]
+      },
+      "on-primary": {
+        "role": "primary",
+        "displayName": "on primary",
+        "tonalRamp": [
+          "#404040",
+          "#767676",
+          "#adadad",
+          "#e4e4e4",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff"
+        ]
+      },
+      "primary-container": {
+        "role": "primary",
+        "displayName": "primary container",
+        "tonalRamp": [
+          "#3b3740",
+          "#6d6776",
+          "#9f96ad",
+          "#d1c5e4",
+          "#ede1ff",
+          "#f2e9ff",
+          "#f7f2ff",
+          "#fcfaff"
+        ]
+      },
+      "on-primary-container": {
+        "role": "primary",
+        "displayName": "on primary container",
+        "tonalRamp": [
+          "#0d0618",
+          "#170c2c",
+          "#221140",
+          "#2d1654",
+          "#4b3572",
+          "#7d6d99",
+          "#aea5c0",
+          "#e0dde7"
+        ]
+      },
+      "secondary-container": {
+        "role": "secondary",
+        "displayName": "secondary container",
+        "tonalRamp": [
+          "#3a383e",
+          "#6c6773",
+          "#9d97a8",
+          "#cfc6dd",
+          "#ebe2f9",
+          "#f0eafb",
+          "#f6f2fc",
+          "#fcfafe"
+        ]
+      },
+      "on-secondary-container": {
+        "role": "secondary",
+        "displayName": "on secondary container",
+        "tonalRamp": [
+          "#07060b",
+          "#0d0c14",
+          "#14111d",
+          "#1a1626",
+          "#383545",
+          "#6f6d78",
+          "#a6a5ac",
+          "#dddddf"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "surface",
+        "tonalRamp": [
+          "#3f3e40",
+          "#747376",
+          "#aaa8ad",
+          "#dfdde4",
+          "#fbf9ff",
+          "#fcfbff",
+          "#fdfcff",
+          "#fefeff"
+        ]
+      },
+      "surface-low": {
+        "role": "neutral",
+        "displayName": "surface low",
+        "tonalRamp": [
+          "#3d3c3e",
+          "#717074",
+          "#a6a4a9",
+          "#dad7de",
+          "#f5f3fa",
+          "#f8f6fb",
+          "#fbfafd",
+          "#fdfdfe"
+        ]
+      },
+      "surface-container": {
+        "role": "neutral",
+        "displayName": "surface container",
+        "tonalRamp": [
+          "#3c3b3d",
+          "#6f6e71",
+          "#a2a1a6",
+          "#d5d4da",
+          "#f1eff5",
+          "#f5f4f8",
+          "#f9f8fb",
+          "#fdfcfd"
+        ]
+      },
+      "surface-high": {
+        "role": "neutral",
+        "displayName": "surface high",
+        "tonalRamp": [
+          "#3a3a3c",
+          "#6c6b6f",
+          "#9e9da2",
+          "#d0ced5",
+          "#eceaf1",
+          "#f1f0f5",
+          "#f6f6f9",
+          "#fcfbfd"
+        ]
+      },
+      "on-surface": {
+        "role": "neutral",
+        "displayName": "on surface",
+        "tonalRamp": [
+          "#070708",
+          "#0d0d0f",
+          "#141216",
+          "#1a181d",
+          "#38373b",
+          "#6f6e71",
+          "#a6a5a7",
+          "#ddddde"
+        ]
+      },
+      "on-surface-variant": {
+        "role": "neutral",
+        "displayName": "on surface variant",
+        "tonalRamp": [
+          "#121114",
+          "#222025",
+          "#322f36",
+          "#413e47",
+          "#5f5c64",
+          "#8b898f",
+          "#b7b6ba",
+          "#e4e3e5"
+        ]
+      },
+      "outline": {
+        "role": "neutral",
+        "displayName": "outline",
+        "tonalRamp": [
+          "#1e1d20",
+          "#38363b",
+          "#524f56",
+          "#6c6870",
+          "#89858e",
+          "#aaa7ad",
+          "#cac8cc",
+          "#ebeaec"
+        ]
+      },
+      "outline-variant": {
+        "role": "neutral",
+        "displayName": "outline variant",
+        "tonalRamp": [
+          "#333134",
+          "#5e5b61",
+          "#89858d",
+          "#b4afba",
+          "#d0cbd6",
+          "#ddd9e1",
+          "#eae8ed",
+          "#f7f6f8"
+        ]
+      },
+      "error": {
+        "role": "neutral",
+        "displayName": "error",
+        "tonalRamp": [
+          "#2d0a08",
+          "#53120e",
+          "#791a14",
+          "#a0221b",
+          "#bc4039",
+          "#cf7570",
+          "#e1aaa7",
+          "#f4dedd"
+        ]
+      },
+      "error-container": {
+        "role": "neutral",
+        "displayName": "error container",
+        "tonalRamp": [
+          "#3e3837",
+          "#746766",
+          "#a99795",
+          "#dec6c4",
+          "#fae2e0",
+          "#fbeae9",
+          "#fdf2f1",
+          "#fefafa"
+        ]
+      },
+      "success": {
+        "role": "neutral",
+        "displayName": "success",
+        "tonalRamp": [
+          "#09180f",
+          "#112d1b",
+          "#194227",
+          "#215734",
+          "#3f7452",
+          "#749b82",
+          "#a9c1b2",
+          "#dee7e1"
+        ]
+      },
+      "success-container": {
+        "role": "neutral",
+        "displayName": "success container",
+        "tonalRamp": [
+          "#363c38",
+          "#656f67",
+          "#93a297",
+          "#c2d5c6",
+          "#def1e2",
+          "#e7f5ea",
+          "#f0f9f2",
+          "#f9fdfa"
+        ]
+      },
+      "warning": {
+        "role": "neutral",
+        "displayName": "warning",
+        "tonalRamp": [
+          "#1c1500",
+          "#342700",
+          "#4c3800",
+          "#644a00",
+          "#81681f",
+          "#a4925d",
+          "#c7bb9b",
+          "#eae5d9"
+        ]
+      },
+      "warning-container": {
+        "role": "neutral",
+        "displayName": "warning container",
+        "tonalRamp": [
+          "#403c31",
+          "#766f5a",
+          "#ada384",
+          "#e4d6ad",
+          "#fff2c9",
+          "#fff5d8",
+          "#fff9e7",
+          "#fffdf6"
+        ]
+      },
+      "dark-primary": {
+        "role": "primary",
+        "displayName": "dark primary",
+        "tonalRamp": [
+          "#342f40",
+          "#615776",
+          "#8d80ad",
+          "#baa8e4",
+          "#d6c4ff",
+          "#e1d4ff",
+          "#ede5ff",
+          "#f8f5ff"
+        ]
+      },
+      "dark-on-primary": {
+        "role": "primary",
+        "displayName": "dark on primary",
+        "tonalRamp": [
+          "#0e081d",
+          "#1a0e35",
+          "#26144d",
+          "#321b66",
+          "#503983",
+          "#8070a5",
+          "#b1a7c8",
+          "#e1ddea"
+        ]
+      },
+      "dark-primary-container": {
+        "role": "primary",
+        "displayName": "dark primary container",
+        "tonalRamp": [
+          "#140e23",
+          "#251a41",
+          "#36255e",
+          "#47317c",
+          "#644f99",
+          "#8f80b5",
+          "#bab0d1",
+          "#e5e1ee"
+        ]
+      },
+      "dark-on-primary-container": {
+        "role": "primary",
+        "displayName": "dark on primary container",
+        "tonalRamp": [
+          "#3b3740",
+          "#6d6776",
+          "#9f96ad",
+          "#d1c5e4",
+          "#ede1ff",
+          "#f2e9ff",
+          "#f7f2ff",
+          "#fcfaff"
+        ]
+      },
+      "dark-secondary-container": {
+        "role": "secondary",
+        "displayName": "dark secondary container",
+        "tonalRamp": [
+          "#131116",
+          "#222029",
+          "#322e3c",
+          "#423d4f",
+          "#605b6c",
+          "#8c8895",
+          "#b8b6bd",
+          "#e4e3e6"
+        ]
+      },
+      "dark-surface": {
+        "role": "neutral",
+        "displayName": "dark surface",
+        "tonalRamp": [
+          "#050506",
+          "#09080b",
+          "#0e0c10",
+          "#121015",
+          "#312f34",
+          "#6a686c",
+          "#a3a2a4",
+          "#dcdbdc"
+        ]
+      },
+      "dark-surface-low": {
+        "role": "neutral",
+        "displayName": "dark surface low",
+        "tonalRamp": [
+          "#070708",
+          "#0d0d0f",
+          "#141216",
+          "#1a181d",
+          "#38373b",
+          "#6f6e71",
+          "#a6a5a7",
+          "#ddddde"
+        ]
+      },
+      "dark-surface-container": {
+        "role": "neutral",
+        "displayName": "dark surface container",
+        "tonalRamp": [
+          "#08080a",
+          "#0f0e12",
+          "#16151a",
+          "#1d1c22",
+          "#3c3a40",
+          "#727175",
+          "#a8a7aa",
+          "#deddde"
+        ]
+      },
+      "dark-surface-high": {
+        "role": "neutral",
+        "displayName": "dark surface high",
+        "tonalRamp": [
+          "#0b0a0c",
+          "#141316",
+          "#1d1c21",
+          "#26252b",
+          "#454349",
+          "#78777b",
+          "#acabae",
+          "#dfdfe0"
+        ]
+      },
+      "dark-on-surface": {
+        "role": "neutral",
+        "displayName": "dark on surface",
+        "tonalRamp": [
+          "#3a383a",
+          "#6b686c",
+          "#9c989e",
+          "#cdc8d0",
+          "#e9e4ec",
+          "#efebf1",
+          "#f5f3f6",
+          "#fbfafc"
+        ]
+      },
+      "dark-on-surface-variant": {
+        "role": "neutral",
+        "displayName": "dark on surface variant",
+        "tonalRamp": [
+          "#333134",
+          "#5e5b61",
+          "#89858d",
+          "#b4afba",
+          "#d0cbd6",
+          "#ddd9e1",
+          "#eae8ed",
+          "#f7f6f8"
+        ]
+      },
+      "dark-outline": {
+        "role": "neutral",
+        "displayName": "dark outline",
+        "tonalRamp": [
+          "#252426",
+          "#444247",
+          "#646168",
+          "#838089",
+          "#a09da5",
+          "#bab8be",
+          "#d5d3d7",
+          "#efeef0"
+        ]
+      },
+      "dark-outline-variant": {
+        "role": "neutral",
+        "displayName": "dark outline variant",
+        "tonalRamp": [
+          "#121114",
+          "#222025",
+          "#322f36",
+          "#413e47",
+          "#5f5c64",
+          "#8b898f",
+          "#b7b6ba",
+          "#e4e3e5"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Page title",
+        "purpose": "Primary page heading."
+      },
+      "title": {
+        "displayName": "Section title",
+        "purpose": "Supporting work-area heading."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Readable app content."
+      },
+      "label": {
+        "displayName": "Control label",
+        "purpose": "Buttons and navigation."
+      }
+    },
+    "motion": [
+      {
+        "name": "material-state",
+        "value": "180ms cubic-bezier(.2, 0, 0, 1)",
+        "purpose": "Visible state changes; minimized under reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "576px"
+      },
+      {
+        "name": "tablet",
+        "value": "768px"
+      },
+      {
+        "name": "next-program",
+        "value": "992px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Filled Material action.",
+      "html": "<button class=\"ds-primary\">Watch live</button>",
+      "css": ".ds-primary{font:500 .9rem Roboto,system-ui,sans-serif;min-height:44px;border-radius:100px;padding:.6rem 1.25rem;cursor:pointer;border:0;background:var(--md-sys-color-primary,#4f378b);color:var(--md-sys-color-on-primary,#fff)}.ds-primary:hover{box-shadow:0 2px 4px rgb(0 0 0 / 15%)}.ds-primary:focus-visible{outline:3px solid var(--md-sys-color-primary,#4f378b);outline-offset:3px;}.ds-primary:active{box-shadow:none}"
+    },
+    {
+      "name": "Secondary button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outlined secondary action.",
+      "html": "<button class=\"ds-secondary\">Try again</button>",
+      "css": ".ds-secondary{font:500 .9rem Roboto,system-ui,sans-serif;min-height:44px;border-radius:100px;padding:.6rem 1.25rem;cursor:pointer;border:1px solid var(--md-sys-color-outline,#79747e);background:transparent;color:var(--md-sys-color-on-surface-variant,#49454f)}.ds-secondary:hover{background:var(--md-sys-color-surface-container-high,#e9e7ef)}.ds-secondary:focus-visible{outline:3px solid var(--md-sys-color-primary,#4f378b);outline-offset:3px;}"
+    },
+    {
+      "name": "Filter chip",
+      "kind": "chip",
+      "refersTo": "chip-selected",
+      "description": "Checkbox selection with a visible focus state.",
+      "html": "<label class=\"ds-chip\"><input type=\"checkbox\" checked>Favorites</label>",
+      "css": ".ds-chip{display:inline-flex;align-items:center;gap:.5rem;min-height:44px;padding:.5rem .85rem;border-radius:8px;font:500 .9rem Roboto,system-ui,sans-serif;background:var(--md-sys-color-secondary-container,#e8def8);color:var(--md-sys-color-on-secondary-container,#1d192b)}.ds-chip:hover{background:var(--md-sys-color-surface-container-high,#e9e7ef)}.ds-chip:focus-within{outline:3px solid var(--md-sys-color-primary,#4f378b);outline-offset:3px;}.ds-chip input{accent-color:var(--md-sys-color-primary,#4f378b)}"
+    },
+    {
+      "name": "Tonal container",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Quiet supporting content with no decorative shadow.",
+      "html": "<section class=\"ds-card\"><h2>Device details</h2><p>Supporting information</p></section>",
+      "css": ".ds-card{padding:1.5rem;border-radius:16px;background:var(--md-sys-color-surface-container-low,#f4f1f9);color:var(--md-sys-color-on-surface,#1d1b20);font:1rem/1.5 Roboto,system-ui,sans-serif}.ds-card h2{font-size:1.25rem;font-weight:500;margin:0 0 .5rem}.ds-card p{color:var(--md-sys-color-on-surface-variant,#49454f);margin:0}"
+    },
+    {
+      "name": "Search field",
+      "kind": "input",
+      "description": "Outlined search field with a container focus ring.",
+      "html": "<label class=\"ds-search\"><span>Search</span><input type=\"search\" placeholder=\"Channels or programs\"></label>",
+      "css": ".ds-search{display:flex;align-items:center;gap:.75rem;padding:0 1rem;min-height:48px;border-radius:100px;border:1px solid var(--md-sys-color-outline,#79747e);background:var(--md-sys-color-surface-container-low,#f4f1f9);color:var(--md-sys-color-on-surface-variant,#49454f);font:.9rem Roboto,system-ui,sans-serif}.ds-search input{border:0;outline:0;background:transparent;color:var(--md-sys-color-on-surface,#1d1b20);min-width:0;font:inherit;caret-color:var(--md-sys-color-primary,#4f378b)}.ds-search input::placeholder{color:var(--md-sys-color-on-surface-variant,#49454f)}.ds-search:focus-within{outline:3px solid var(--md-sys-color-primary,#4f378b);outline-offset:3px;}"
+    },
+    {
+      "name": "Navigation",
+      "kind": "nav",
+      "refersTo": "navigation-selected",
+      "description": "Tonal current destination with aria-current.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Example navigation\"><a href=\"#live\" aria-current=\"page\">Live TV</a><a href=\"#recordings\">Recordings</a></nav>",
+      "css": ".ds-nav{display:flex;gap:.25rem}.ds-nav a{font:500 .9rem Roboto,system-ui,sans-serif;min-height:44px;border-radius:100px;padding:.6rem 1.25rem;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none;color:var(--md-sys-color-on-surface-variant,#49454f)}.ds-nav a[aria-current]{background:var(--md-sys-color-secondary-container,#e8def8);color:var(--md-sys-color-on-secondary-container,#1d192b)}.ds-nav a:hover{background:var(--md-sys-color-surface-container-high,#e9e7ef)}.ds-nav a:focus-visible{outline:3px solid var(--md-sys-color-primary,#4f378b);outline-offset:3px;}"
+    },
+    {
+      "name": "Airing progress",
+      "kind": "custom",
+      "description": "Current-program time progress paired with a readable time label.",
+      "html": "<div class=\"ds-airing\"><span>3:00 PM – 3:30 PM</span><div class=\"ds-track\" aria-hidden=\"true\"><span></span></div></div>",
+      "css": ".ds-airing{font:.8rem Roboto,system-ui,sans-serif;color:var(--md-sys-color-on-surface-variant,#49454f);font-variant-numeric:tabular-nums}.ds-track{height:4px;border-radius:100px;margin-top:.5rem;background:var(--md-sys-color-secondary-container,#e8def8)}.ds-track span{display:block;width:50%;height:100%;border-radius:inherit;background:var(--md-sys-color-primary,#4f378b)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Material Broadcast",
+    "overview": "This is an operating interface, not a streaming-service marketing page. Material Design 3 provides the consistent component language: readable workhorse typography, tonal surfaces, explicit selection states, and familiar touch-friendly controls. The viewer and administration share the same visual system.\n\nThe implementation uses Google's official Material Web filled/outlined buttons and icon buttons alongside native controls and Bootstrap layout/collapse utilities. `public/css/style.css` owns the shared tokens; `public/css/client.css` owns viewer-specific patterns. `frontend/material.js` selects the vendored component bundle. These files, rather than historical screenshots, are implementation authority.",
+    "keyCharacteristics": [
+      "Violet actions and lavender selection containers.",
+      "Shared light/dark tonal surfaces.",
+      "Compact, readable schedules and generous touch targets.",
+      "Flat surfaces at rest; depth comes from tonal hierarchy."
+    ],
+    "rules": [
+      {
+        "name": "The Shared Theme Rule",
+        "body": "Viewer and admin use one `theme` preference and the same semantic tokens; neither owns a separate palette. An unset preference follows the device.",
+        "section": "colors"
+      },
+      {
+        "name": "The State Color Rule",
+        "body": "Red means error or a destructive action. It is not a decorative accent.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tonal Depth Rule",
+        "body": "Prefer a surface role over a new shadow or independent hardcoded background.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** pair every surface/container color with its corresponding foreground token.",
+      "**Do** keep viewer and admin theme behavior identical.",
+      "**Do** preserve readable text and at least 44px interactive targets on phones.",
+      "**Do** keep schedule overflow inside the schedule region.",
+      "**Do** preserve semantic states, keyboard operation, reduced motion, and visible focus."
+    ],
+    "donts": [
+      "**Don't** restore a separate dark-only viewer palette.",
+      "**Don't** replace task controls with decorative streaming-service shelves.",
+      "**Don't** use color alone to communicate an error, selection, or destructive action.",
+      "**Don't** add decorative shadows to flat tonal containers."
+    ]
+  }
+}

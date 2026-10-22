@@ -1,45 +1,35 @@
-<%- include('_header', { title: 'Admin' }) %>
+<%- include('_header', { title: 'Overview' }) %>
 
-<div class="d-flex align-items-center mb-3">
-  <h1 class="h4 mb-0 flex-grow-1">Admin</h1>
-  <a href="/" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to TV Guide</a>
+<div class="page-heading">
+  <div><h1>Device overview</h1><p class="page-description">Manage your tuner and channel lineup.</p></div>
 </div>
 
-<% if (error) { %>
-  <div class="alert alert-danger">Could not reach device at <strong><%= host %></strong>: <%= error %></div>
-<% } else { %>
-  <div class="card bg-body-tertiary mb-3">
-    <div class="card-body">
-      <dl class="row mb-0 small">
-        <dt class="col-5 col-sm-4 text-body-secondary">Friendly Name</dt><dd class="col-7 col-sm-8"><%= device.FriendlyName %></dd>
-        <dt class="col-5 col-sm-4 text-body-secondary">Model</dt><dd class="col-7 col-sm-8"><%= device.ModelNumber %></dd>
-        <dt class="col-5 col-sm-4 text-body-secondary">Firmware</dt><dd class="col-7 col-sm-8"><%= device.FirmwareName %> <%= device.FirmwareVersion %></dd>
-        <dt class="col-5 col-sm-4 text-body-secondary">Device ID</dt><dd class="col-7 col-sm-8"><%= device.DeviceID %></dd>
-        <dt class="col-5 col-sm-4 text-body-secondary">Tuner Count</dt><dd class="col-7 col-sm-8"><%= device.TunerCount %></dd>
-      </dl>
+<div class="admin-overview">
+  <section>
+    <h2 class="mb-3">Your HDHomeRun</h2>
+    <% if (error) { %>
+      <div class="alert alert-danger" role="alert">Could not reach device at <strong><%= host %></strong>: <%= error %></div>
+      <a href="/admin" class="btn btn-outline-secondary">Try again</a>
+    <% } else { %>
+      <div class="card"><div class="card-body">
+        <dl class="device-details">
+          <dt>Friendly name</dt><dd><%= device.FriendlyName %></dd>
+          <dt>Model</dt><dd><%= device.ModelNumber %></dd>
+          <dt>Firmware</dt><dd><%= device.FirmwareName %> <%= device.FirmwareVersion %></dd>
+          <dt>Device ID</dt><dd><%= device.DeviceID %></dd>
+          <dt>Tuners</dt><dd><%= device.TunerCount %></dd>
+        </dl>
+      </div></div>
+    <% } %>
+  </section>
+  <section>
+    <h2 class="mb-3">Device tools</h2>
+    <div class="admin-tools">
+      <a class="admin-tool" href="/admin/channels"><i class="bi bi-list-ul" aria-hidden="true"></i><span><strong>Channel lineup</strong><small>Choose favorites and show or hide channels.</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+      <a class="admin-tool" href="/admin/scan"><i class="bi bi-broadcast" aria-hidden="true"></i><span><strong>Scan for channels</strong><small>Find channels from your antenna or cable source.</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+      <a class="admin-tool" href="/admin/status"><i class="bi bi-reception-4" aria-hidden="true"></i><span><strong>Tuner status</strong><small>See active tuners and signal quality.</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>
     </div>
-  </div>
-<% } %>
-
-<div class="row row-cols-3 g-2">
-  <div class="col">
-    <a class="card text-center text-decoration-none py-4" href="/admin/channels">
-      <div class="fs-2">📺</div>
-      <div class="small mt-1">Channel Lineup</div>
-    </a>
-  </div>
-  <div class="col">
-    <a class="card text-center text-decoration-none py-4" href="/admin/scan">
-      <div class="fs-2">🔍</div>
-      <div class="small mt-1">Detect Channels</div>
-    </a>
-  </div>
-  <div class="col">
-    <a class="card text-center text-decoration-none py-4" href="/admin/status">
-      <div class="fs-2">📶</div>
-      <div class="small mt-1">System Status</div>
-    </a>
-  </div>
+  </section>
 </div>
 
 <%- include('_footer') %>

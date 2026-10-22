@@ -15,7 +15,7 @@
     </div>
   </div>
 <% } else { %>
-  <div class="d-flex align-items-center mb-3">
+  <div class="page-heading">
     <a href="/" class="icon-link me-2" title="Back to guide" aria-label="Back to guide"><i class="bi bi-arrow-left"></i></a>
     <h1 class="h5 mb-0 flex-grow-1">
       <span class="badge text-bg-primary me-2"><%= channel %></span>
@@ -26,11 +26,11 @@
     <% } %>
   </div>
 
-  <div class="ratio ratio-16x9 bg-black rounded overflow-hidden mb-3">
+  <div class="ratio ratio-16x9 player-panel mb-3">
     <video id="player" controls autoplay playsinline></video>
   </div>
 
-  <div id="player-status" class="text-body-secondary small">Tuning&hellip; usually just a few seconds.</div>
+  <div id="player-status" class="text-body-secondary small" role="status">Tuning&hellip; usually just a few seconds.</div>
   <div id="captions-status" class="text-body-secondary small">Captions: checking stream...</div>
   <% if (recordEnabled) { %>
     <div id="record-status" class="text-body-secondary small mt-1"></div>
@@ -41,6 +41,11 @@
 <script>
   (function () {
     var channel = <%- JSON.stringify(channel) %>;
+    if (<%= !!embedded %>) {
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') window.parent.postMessage('lunatv:close-player', window.location.origin);
+      });
+    }
     var forcedProfile = <%- JSON.stringify(qualityProfile) %>;
     var qualityOptions = <%- JSON.stringify(qualityOptions || []) %>;
     var webvttSidecarEnabled = <%- JSON.stringify(!!webvttSidecarEnabled) %>;

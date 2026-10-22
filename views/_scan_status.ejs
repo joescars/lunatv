@@ -1,17 +1,17 @@
 <div id="scan-status"
      <% if (status && status.ScanInProgress) { %>hx-get="/admin/scan/status" hx-trigger="load delay:2s" hx-swap="outerHTML"<% } %>>
   <% if (error) { %>
-    <div class="alert alert-danger">Could not read scan status: <%= error %></div>
+    <div class="alert alert-danger" role="alert">Could not read scan status: <%= error %></div>
   <% } else if (!status) { %>
     <div class="alert alert-secondary">No scan status available.</div>
   <% } else if (status.ScanInProgress) { %>
     <div class="card bg-body-tertiary">
       <div class="card-body">
         <p>Scanning&hellip; found <strong><%= status.Found || 0 %></strong> channel(s) so far.</p>
-        <div class="progress mb-3" role="progressbar">
+        <div class="progress mb-3" role="progressbar" aria-label="Channel scan progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<%= status.Progress || 0 %>">
           <div class="progress-bar" style="width: <%= status.Progress || 0 %>%"></div>
         </div>
-        <form hx-post="/admin/scan/abort" hx-target="#scan-status" hx-swap="outerHTML">
+        <form hx-post="/admin/scan/abort" hx-target="#scan-status" hx-swap="outerHTML" hx-disabled-elt="find button" class="mt-4">
           <button type="submit" class="btn btn-outline-danger">Abort Scan</button>
         </form>
       </div>
@@ -21,9 +21,10 @@
       <div class="card-body">
         <p>No scan in progress.</p>
         <% if (status.Found) { %><p><%= status.Found %> channel(s) found in last scan.</p><% } %>
-        <form hx-post="/admin/scan/start" hx-target="#scan-status" hx-swap="outerHTML" class="d-flex align-items-center gap-2 flex-wrap">
+        <form hx-post="/admin/scan/start" hx-target="#scan-status" hx-swap="outerHTML" hx-disabled-elt="find button" class="d-flex align-items-center gap-3 flex-wrap">
           <% if (status.SourceList && status.SourceList.length > 1) { %>
-            <select name="source" class="form-select form-select-sm w-auto">
+            <label for="scan-source" class="text-body-secondary">Source</label>
+            <select id="scan-source" name="source" class="form-select w-auto">
               <% status.SourceList.forEach(function(src) { %>
                 <option value="<%= src %>" <%= src === status.Source ? 'selected' : '' %>><%= src %></option>
               <% }); %>

@@ -1,291 +1,89 @@
-/*
- * LunaTV client theme - dark-only, matches the Roku app's palette
- * (0x0A1428 background, 0x38BDF8 accent blue) so the web and Roku clients
- * feel like one product. Scoped to body.client-theme so admin pages keep
- * plain Bootstrap dark/light instead.
- */
-
-body.client-theme {
-  --bs-body-bg: #0a1428;
-  --bs-body-color: #e2e8f0;
-  --bs-secondary-color: #9cb0c4;
-  --bs-border-color: #1f2f47;
-  --bs-tertiary-bg: #101d33;
-  --bs-primary: #38bdf8;
-  --bs-primary-rgb: 56, 189, 248;
-  background-color: var(--bs-body-bg);
-  color: var(--bs-body-color);
+/* Viewer surfaces inherit the same Material tokens as administration. */
+.guide-toolbar { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+.guide-search { display: flex; align-items: center; gap: .65rem; padding: 0 1rem; height: 48px; border: 1px solid var(--md-sys-color-outline); border-radius: 100px; background: var(--md-sys-color-surface-container-low); flex: 1 1 240px; max-width: 340px; color: var(--bs-secondary-color); }
+.guide-search:focus-within { outline: 2px solid var(--md-sys-color-primary); outline-offset: 2px; }
+.guide-search input { width: 100%; min-width: 0; background: transparent; border: none; outline: none; color: var(--bs-body-color); font-size: .9rem; }
+.guide-search input::placeholder { color: var(--bs-secondary-color); opacity: 1; }
+.guide-count { margin-left: auto; color: var(--bs-secondary-color); font-size: .85rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.guide-channel { border-bottom: 1px solid var(--bs-border-color); }
+.guide-channel:first-child { border-top: 1px solid var(--bs-border-color); }
+.guide-channel-header { display: flex; align-items: center; gap: 1rem; padding: 1.15rem .5rem; }
+.guide-channel-num { display: flex; align-items: center; justify-content: center; min-width: 48px; height: 48px; border-radius: 12px; background: var(--md-sys-color-surface-container); color: var(--md-sys-color-primary); font-variant-numeric: tabular-nums; font-weight: 500; font-size: .9rem; flex-shrink: 0; }
+.guide-channel-thumb { width: 64px; height: 76px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+.guide-channel-info { flex: 1 1 0; min-width: 0; background: none; border: none; padding: .25rem 0; color: var(--bs-body-color); text-align: left; cursor: pointer; }
+.guide-channel-name { display: block; font-size: .8rem; color: var(--bs-secondary-color); margin-bottom: .25rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.guide-channel-now { font-size: 1rem; line-height: 1.4; font-weight: 500; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.guide-airing-meta { display: block; margin-top: .4rem; font-size: .8rem; color: var(--bs-secondary-color); font-variant-numeric: tabular-nums; }
+.airing-progress { display: block; height: 4px; max-width: 300px; margin-top: .5rem; border-radius: 100px; background: var(--md-sys-color-secondary-container); overflow: hidden; }
+.airing-progress > span { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--md-sys-color-primary); transition: width var(--app-motion); }
+.guide-next { flex: 0 1 230px; min-width: 0; padding-left: 1rem; font-size: .85rem; color: var(--bs-secondary-color); }
+.guide-next strong { display: block; color: var(--bs-body-color); font-weight: 400; margin-top: .2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn-watch { flex-shrink: 0; }
+.guide-expand-btn { flex-shrink: 0; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border: none; border-radius: 100px; background: transparent; color: var(--bs-secondary-color); }
+.guide-expand-btn:hover, .guide-channel-info:hover { color: var(--md-sys-color-primary); }
+.guide-expand-btn i { transition: transform var(--app-motion); }
+.guide-expand-btn[aria-expanded="true"] i { transform: rotate(180deg); }
+.guide-channel-body { background: var(--md-sys-color-surface-container-low); border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
+.guide-channel-body > h2 { font-size: 1rem; margin-bottom: 1.25rem; }
+.guide-airing { display: flex; gap: 1rem; padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--bs-border-color); }
+.guide-airing:last-child { margin: 0; padding: 0; border: none; }
+.guide-airing img { width: 56px; height: 76px; object-fit: cover; border-radius: 8px; }
+.guide-airing p { max-width: 70ch; }
+.guide-badge-now { display: inline-flex; align-items: center; font-size: .75rem; padding: .15rem .5rem; border-radius: 6px; background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); font-weight: 500; white-space: nowrap; }
+.guide-empty { padding: 2rem; text-align: center; background: var(--md-sys-color-surface-container-low); border-radius: 16px; }
+.guide-empty p { color: var(--bs-secondary-color); max-width: 60ch; margin: .5rem auto 1.25rem; }
+.guide-loading { padding: 2rem; display: flex; align-items: center; gap: 1rem; background: var(--md-sys-color-surface-container-low); border-radius: 16px; color: var(--bs-secondary-color); }
+:root { --guide-col-width: 148px; }
+.guide-scroll { overflow: auto; max-height: calc(100dvh - 260px); min-height: 180px; border: 1px solid var(--bs-border-color); border-radius: 16px; -webkit-overflow-scrolling: touch; }
+.guide-inner { position: relative; min-width: 100%; }
+.guide-header-row { display: flex; position: sticky; top: 0; z-index: 3; background: var(--md-sys-color-surface-container); border-bottom: 1px solid var(--bs-border-color); }
+.guide-header-spacer { position: sticky; left: 0; z-index: 4; width: var(--guide-col-width); flex: 0 0 var(--guide-col-width); background: var(--md-sys-color-surface-container); border-right: 1px solid var(--bs-border-color); font-size: .85rem; font-weight: 500; padding: .85rem; }
+.guide-header-track { position: relative; flex: 0 0 auto; height: 48px; }
+.guide-time-label { position: absolute; top: 0; height: 100%; display: flex; align-items: center; padding-left: .75rem; font-size: .85rem; border-left: 1px solid var(--bs-border-color); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.guide-row { display: flex; border-bottom: 1px solid var(--bs-border-color); }
+.guide-row:last-of-type { border-bottom: none; }
+.guide-channel-cell { position: sticky; left: 0; z-index: 2; width: var(--guide-col-width); flex: 0 0 var(--guide-col-width); background: var(--md-sys-color-surface-container-low); border: none; border-right: 1px solid var(--bs-border-color); display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: .25rem; padding: .75rem; color: var(--bs-body-color); text-align: left; }
+.guide-channel-number { color: var(--md-sys-color-primary); font-weight: 500; font-size: .9rem; font-variant-numeric: tabular-nums; }
+.guide-channel-label { display: block; font-size: .8rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.guide-channel-cell:hover { background: var(--md-sys-color-secondary-container); }
+.guide-track { position: relative; flex: 0 0 auto; height: 88px; }
+.guide-block { position: absolute; top: 4px; bottom: 4px; border: none; border-radius: 8px; padding: .7rem .75rem; background: var(--md-sys-color-surface-container-low); color: var(--bs-body-color); font-size: .85rem; line-height: 1.4; text-align: left; overflow: hidden; }
+.guide-block-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-weight: 500; }
+.guide-block-time { display: block; margin-top: .3rem; font-size: .75rem; color: var(--bs-secondary-color); white-space: nowrap; }
+.guide-block:hover { background: var(--md-sys-color-surface-container-high); }
+.guide-block.is-now { background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
+.guide-block.is-now .guide-block-time { color: var(--md-sys-color-on-primary-container); }
+.guide-block:focus-visible, .guide-channel-cell:focus-visible { outline-offset: -3px; }
+.guide-no-program { display: block; padding: 1.5rem 1rem; color: var(--bs-secondary-color); font-size: .85rem; }
+.guide-now-line { position: absolute; top: 48px; bottom: 0; width: 2px; background: var(--md-sys-color-primary); z-index: 1; pointer-events: none; }
+.client-theme-bare { margin: 0; overflow: hidden; }
+.watch-overlay { position: fixed; inset: 0; max-width: none; max-height: none; width: 100%; height: 100%; height: 100dvh; padding: 0; border: none; margin: 0; background: #000; color: #fff; }
+.watch-overlay::backdrop { background: #000; }
+.watch-overlay-frame { width: 100%; height: 100%; border: 0; display: block; }
+.watch-overlay-close, .watch-record-btn { position: fixed; top: calc(.75rem + env(safe-area-inset-top, 0px)); width: 48px; height: 48px; border-radius: 100px; border: none; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem; background: #211f26; color: #fff; z-index: 2; }
+.watch-overlay-close { right: calc(.75rem + env(safe-area-inset-right, 0px)); }
+.watch-record-btn { left: calc(.75rem + env(safe-area-inset-left, 0px)); color: #f2b8b5; }
+.watch-record-btn:disabled { color: #cac4d0; }
+.watch-fullbleed { position: fixed; inset: 0; background: #000; }
+.watch-fullbleed video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+.watch-fullbleed-overlay { position: absolute; left: 0; right: 0; bottom: 4rem; padding: .5rem .75rem; color: #e6e0e9; background: rgb(20 18 24 / 85%); pointer-events: none; }
+.player-panel { border-radius: 16px; overflow: hidden; background: #000; }
+.recording-poster { width: 4rem; height: 4rem; object-fit: cover; border-radius: 8px; }
+@media (max-width: 991px) { .guide-next { display: none; } }
+@media (max-width: 767px) {
+  .guide-channel-header { gap: .65rem; padding: 1rem 0; }
+  .guide-channel-thumb { display: none; }
+  .guide-channel-num { min-width: 40px; height: 44px; font-size: .8rem; }
+  .guide-channel-now { font-size: .9rem; }
+  .guide-channel-name, .guide-airing-meta { font-size: .8rem; }
+  .guide-expand-btn { width: 44px; }
+  .btn-watch { --md-filled-button-leading-space: 12px; --md-filled-button-trailing-space: 12px; }
+  .guide-search { max-width: none; flex-basis: 100%; }
+  .guide-toolbar { gap: .75rem; }
+  .guide-scroll { max-height: calc(100dvh - 335px); }
+  :root { --guide-col-width: 104px; }
 }
-
-/* Bare/embedded pages (watch.ejs loaded inside the guide's full-screen
-   overlay, or the overlay iframe wrapper itself) - no navbar, no page
-   padding, content fills the viewport edge-to-edge. */
-body.client-theme-bare {
-  margin: 0;
-  overflow: hidden;
-}
-
-.watch-fullbleed {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  background: #000;
-}
-
-.watch-fullbleed video {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  background: #000;
-}
-
-.watch-fullbleed-overlay {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 0.5rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(to top, rgba(10, 20, 40, 0.85), transparent);
-  color: #9cb0c4;
-  pointer-events: none;
-}
-
-/* Floating record button for the embedded (mobile guide overlay) player.
-   Mirrors .watch-overlay-close's circular style, but sits top-left since
-   the parent page's close button already owns top-right - see
-   guide.ejs's watch-overlay. */
-.watch-record-btn {
-  position: fixed;
-  top: calc(0.6rem + env(safe-area-inset-top, 0px));
-  left: calc(0.6rem + env(safe-area-inset-left, 0px));
-  z-index: 1056;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 50%;
-  border: none;
-  background: rgba(10, 20, 40, 0.75);
-  color: #dc3545;
-  font-size: 1.3rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.watch-record-btn:disabled {
-  color: #9cb0c4;
-}
-
-/* The guide's full-screen watch overlay (parent page, not the iframe
-   document) - see guide.ejs's openWatchOverlay()/closeWatchOverlay(). */
-.watch-overlay {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 1055;
-  background: #000;
-}
-
-.watch-overlay-frame {
-  width: 100%;
-  height: 100%;
-  border: 0;
-  display: block;
-}
-
-.watch-overlay-close {
-  position: fixed;
-  top: calc(0.6rem + env(safe-area-inset-top, 0px));
-  right: calc(0.6rem + env(safe-area-inset-right, 0px));
-  z-index: 1056;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 50%;
-  border: none;
-  background: rgba(10, 20, 40, 0.75);
-  color: #fff;
-  font-size: 1.1rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.recording-poster {
-  width: 4rem;
-  height: 4rem;
-  object-fit: cover;
-  border-radius: 0.375rem;
-}
-
-.min-w-0 {
-  min-width: 0;
-}
-
-body.client-theme .navbar.client-navbar {
-  background-color: #0a1428;
-  border-bottom: 1px solid #1f2f47;
-}
-
-body.client-theme .client-logo {
-  height: 40px;
-  width: auto;
-  display: block;
-}
-
-body.client-theme a.icon-link {
-  color: var(--bs-secondary-color);
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 8px;
-}
-
-body.client-theme a.icon-link:hover {
-  background-color: var(--bs-tertiary-bg);
-  color: var(--bs-body-color);
-}
-
-body.client-theme button.icon-link {
-  border: none;
-  background: none;
-}
-
-body.client-theme button.icon-link.icon-btn-danger {
-  color: #dc3545;
-}
-
-body.client-theme button.icon-link.icon-btn-danger:hover {
-  background-color: var(--bs-tertiary-bg);
-}
-
-body.client-theme button.icon-link:disabled {
-  color: var(--bs-secondary-color);
-}
-
-/* Guide list ------------------------------------------------------------ */
-
-body.client-theme .guide-channel {
-  background-color: var(--bs-tertiary-bg);
-  border: 1px solid var(--bs-border-color);
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-body.client-theme .guide-channel + .guide-channel {
-  margin-top: 0.6rem;
-}
-
-body.client-theme .guide-channel-header {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  padding: 0.65rem 0.75rem;
-  min-height: 4rem;
-}
-
-body.client-theme .guide-channel-num {
-  flex: 0 0 auto;
-  min-width: 2.5rem;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  font-size: 0.8rem;
-  color: var(--bs-secondary-color);
-}
-
-body.client-theme .guide-channel-thumb {
-  width: 2.75rem;
-  height: 2.75rem;
-  border-radius: 6px;
-  object-fit: cover;
-  cursor: pointer;
-}
-
-body.client-theme .guide-channel-info {
-  flex: 1 1 auto;
-  min-width: 0;
-  cursor: pointer;
-}
-
-body.client-theme .guide-channel-name {
-  font-weight: 700;
-  font-size: 0.95rem;
-}
-
-body.client-theme .guide-channel-now {
-  font-size: 0.82rem;
-  color: var(--bs-secondary-color);
-  text-overflow: ellipsis;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-body.client-theme .btn-watch {
-  flex: 0 0 auto;
-  width: 3rem;
-  height: 3rem;
-  border-radius: 50%;
-  border: none;
-  background: var(--bs-primary);
-  color: #0a1428;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.2rem;
-  transition: transform 0.08s ease, background-color 0.1s ease;
-}
-
-body.client-theme .btn-watch:hover,
-body.client-theme .btn-watch:focus {
-  background: #67cdf9;
-  color: #0a1428;
-}
-
-body.client-theme .btn-watch:active {
-  transform: scale(0.94);
-}
-
-body.client-theme .guide-expand-btn {
-  flex: 0 0 auto;
-  width: 2.5rem;
-  height: 2.5rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: var(--bs-secondary-color);
-  font-size: 1.1rem;
-  transition: transform 0.15s ease;
-}
-
-body.client-theme .guide-expand-btn[aria-expanded="true"] {
-  transform: rotate(180deg);
-}
-
-body.client-theme .guide-channel-body {
-  border-top: 1px solid var(--bs-border-color);
-  padding: 0.85rem 0.9rem;
-}
-
-body.client-theme .guide-badge-now {
-  background: #dc2626;
-  color: #fff;
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  padding: 0.15rem 0.4rem;
-  border-radius: 4px;
-}
-
-body.client-theme .guide-filter-pill.active {
-  background-color: var(--bs-primary);
-  color: #0a1428;
-  border-color: var(--bs-primary);
+@media (max-width: 359px) {
+  .guide-channel-header { gap: .35rem; }
+  .btn-watch i[slot="icon"] { display: none; }
 }

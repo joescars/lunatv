@@ -1,251 +1,31 @@
-<%- include('_client_header', { title: 'TV Guide (Grid)', fluid: true }) %>
+<%- include('_client_header', { title: 'Live TV · Grid', fluid: true }) %>
 
-<div class="d-flex align-items-center mb-3">
-  <h1 class="h4 mb-0 flex-grow-1">TV Guide</h1>
-  <a href="/guide" class="btn btn-outline-secondary btn-sm">List view</a>
+<div class="page-heading">
+  <div><h1>Live TV</h1><p class="page-description">Your channels, on a timeline.</p></div>
+  <nav class="view-switch" aria-label="Guide view">
+    <a href="/guide"><i class="bi bi-list-ul" aria-hidden="true"></i>List</a>
+    <a href="/guide/grid" aria-current="page"><i class="bi bi-grid-3x3" aria-hidden="true"></i>Grid</a>
+  </nav>
+</div>
+<%- include('_guide_toolbar') %>
+
+<div id="guide-content" aria-label="Channel schedule">
+  <% if (error) { %>
+    <div class="guide-empty" role="alert"><h2>Your guide couldn’t load</h2><p><%= error %></p><a href="/guide/grid" class="btn btn-primary">Try again</a><a href="/admin" class="btn btn-outline-secondary">Check device</a></div>
+  <% } else if (!channels.length) { %>
+    <div class="guide-empty"><h2>No channels available</h2><p>Check your tuner connection or scan for channels.</p><a href="/admin/scan" class="btn btn-primary">Scan channels</a></div>
+  <% } else { %>
+    <p class="small text-body-secondary">Select a channel or program to watch that channel live. Scroll right for upcoming programs.</p>
+    <div class="guide-scroll" tabindex="0" aria-label="Scrollable program schedule"><div class="guide-inner" id="guide-inner"></div></div>
+  <% } %>
+</div>
+<div id="guide-filter-empty" class="guide-empty mt-3" hidden>
+  <h2>No matching channels</h2><p>Try another search or clear your filters to see all available channels.</p>
+  <md-outlined-button id="guide-clear-filters">Clear filters</md-outlined-button>
 </div>
 
-<% if (error) { %>
-  <div class="alert alert-danger">Could not load guide data: <%= error %></div>
-<% } else if (!channels.length) { %>
-  <div class="alert alert-secondary">No guide data available.</div>
-<% } else { %>
-  <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
-    <div class="btn-group flex-wrap" role="group" aria-label="Guide filters">
-      <input type="checkbox" class="btn-check" id="filter-favorites" autocomplete="off">
-      <label class="btn btn-outline-warning btn-sm" for="filter-favorites"><i class="bi bi-star-fill me-1"></i>Favorites</label>
-
-      <input type="checkbox" class="btn-check" id="filter-show-hidden" autocomplete="off">
-      <label class="btn btn-outline-secondary btn-sm" for="filter-show-hidden">Show Hidden</label>
-    </div>
-    <span class="text-body-secondary small ms-auto" id="guide-channel-count"></span>
-  </div>
-
-  <div class="guide-scroll">
-    <div class="guide-inner" id="guide-inner"></div>
-  </div>
-<% } %>
-
-<style>
-  :root { --guide-col-width: 72px; }
-  @media (min-width: 768px) { :root { --guide-col-width: 96px; } }
-  .guide-scroll { overflow: auto; max-height: calc(100vh - 11rem); border: 1px solid var(--bs-border-color); border-radius: 8px; -webkit-overflow-scrolling: touch; }
-  .guide-inner { position: relative; }
-  .guide-header-row { display: flex; position: sticky; top: 0; z-index: 3; background: var(--bs-body-bg); border-bottom: 1px solid var(--bs-border-color); }
-  .guide-header-spacer { position: sticky; left: 0; z-index: 4; width: var(--guide-col-width); flex: 0 0 var(--guide-col-width); background: var(--bs-body-bg); border-right: 1px solid var(--bs-border-color); font-weight: 600; font-size: .78rem; display: flex; align-items: center; padding: .35rem; }
-  .guide-header-track { position: relative; flex: 0 0 auto; height: 1.85rem; }
-  .guide-time-label { position: absolute; top: 0; height: 100%; display: flex; align-items: center; padding-left: .5rem; font-weight: 600; font-size: .8rem; border-left: 1px solid var(--bs-border-color); white-space: nowrap; }
-  .guide-row { display: flex; border-bottom: 1px solid var(--bs-border-color); }
-  .guide-channel-cell { position: sticky; left: 0; z-index: 2; width: var(--guide-col-width); flex: 0 0 var(--guide-col-width); background: var(--bs-body-bg); border-right: 1px solid var(--bs-border-color); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .1rem; padding: .25rem .15rem; cursor: pointer; text-align: center; }
-  .guide-channel-cell img { max-width: 100%; max-height: 20px; object-fit: contain; }
-  .guide-channel-number { font-size: .72rem; font-weight: 700; }
-  .guide-track { position: relative; flex: 0 0 auto; min-height: 3rem; }
-  .guide-block { position: absolute; top: 2px; bottom: 2px; overflow: hidden; border: 1px solid var(--bs-border-color); border-radius: 4px; padding: .2rem .4rem; background: var(--bs-tertiary-bg); font-size: .78rem; line-height: 1.5; cursor: pointer; white-space: nowrap; text-overflow: ellipsis; }
-  .guide-block:hover { filter: brightness(1.15); }
-  .guide-block.is-now { background: var(--bs-tertiary-bg); border-color: var(--bs-primary); border-left: 3px solid var(--bs-primary); padding-left: calc(.4rem - 2px); font-weight: 600; }
-  .guide-now-line { position: absolute; top: 0; bottom: 0; width: 2px; background: #dc3545; z-index: 5; pointer-events: none; }
-</style>
-
-<script>
-(function () {
-  var data = <%- JSON.stringify(channels) %>;
-  var now = <%= now %>;
-  var container = document.getElementById('guide-inner');
-  var scrollParent = document.querySelector('.guide-scroll');
-  var favoritesCheck = document.getElementById('filter-favorites');
-  var showHiddenCheck = document.getElementById('filter-show-hidden');
-  var countEl = document.getElementById('guide-channel-count');
-  if (!container || !scrollParent || !favoritesCheck || !showHiddenCheck || !countEl) return;
-
-  var colWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--guide-col-width')) || 84;
-  var hasAutoScrolledToNow = false;
-
-  // By default, hidden channels are excluded from the TV guide.
-  showHiddenCheck.checked = false;
-
-  // Longest airing across all channels, so we never build a range wider than
-  // the data we actually have (guide route fetches an 8h window).
-  var dataEnd = now;
-  data.forEach(function (ch) {
-    (ch.Guide || []).forEach(function (airing) {
-      if (airing.EndTime > dataEnd) dataEnd = airing.EndTime;
-    });
-  });
-
-  // On mobile, keep the original fixed-density 240-minute horizontally
-  // scrollable window. On wider viewports, stretch both the pixels-per-minute
-  // and the time range to fill the available width, up to the data we have.
-  var MOBILE_BREAKPOINT = 768;
-  var PX_PER_MIN, RANGE_MINUTES;
-  var rangeStart = now - (now % 1800); // align to the current or previous 30-minute mark
-  var availableWidth = scrollParent.clientWidth - colWidth;
-
-  if (window.innerWidth >= MOBILE_BREAKPOINT && availableWidth > 0) {
-    var dataMinutes = Math.max(120, Math.ceil((dataEnd - rangeStart) / 60));
-    PX_PER_MIN = Math.min(8, Math.max(3.5, availableWidth / Math.min(dataMinutes, 360)));
-    RANGE_MINUTES = Math.min(dataMinutes, Math.max(240, Math.round((availableWidth / PX_PER_MIN) / 30) * 30));
-  } else {
-    PX_PER_MIN = 5;
-    RANGE_MINUTES = 240;
-  }
-
-  var rangeEnd = rangeStart + RANGE_MINUTES * 60;
-  var trackWidth = RANGE_MINUTES * PX_PER_MIN;
-
-  function minutesFromStart(ts) {
-    return (ts - rangeStart) / 60;
-  }
-
-  function fmtTime(ts) {
-    return new Date(ts * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  }
-
-  function chooseProfile() {
-    var connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-    if (!connection) return 'medium';
-    if (connection.saveData) return 'low';
-
-    var effectiveType = connection.effectiveType || '';
-    if (effectiveType === 'slow-2g' || effectiveType === '2g' || effectiveType === '3g') {
-      return 'low';
-    }
-    if (typeof connection.downlink === 'number' && connection.downlink >= 8) {
-      return 'high';
-    }
-    if (typeof connection.downlink === 'number' && connection.downlink <= 2.5) {
-      return 'low';
-    }
-    return 'medium';
-  }
-
-  function prewarmAndNavigate(channel) {
-    var profile = chooseProfile();
-    var encodedChannel = encodeURIComponent(channel);
-    var destination = '/watch/' + encodedChannel + '?quality=' + encodeURIComponent(profile);
-    var startUrl = '/stream/' + encodedChannel + '/h264/' + encodeURIComponent(profile) + '/start';
-    var didNavigate = false;
-
-    function navigateNow() {
-      if (didNavigate) return;
-      didNavigate = true;
-      window.location.href = destination;
-    }
-
-    setTimeout(navigateNow, 140);
-    fetch(startUrl, { method: 'POST', keepalive: true })
-      .catch(function () {})
-      .finally(navigateNow);
-  }
-
-  var header = document.createElement('div');
-  header.className = 'guide-header-row';
-  var headerSpacer = document.createElement('div');
-  headerSpacer.className = 'guide-header-spacer';
-  headerSpacer.textContent = new Date(now * 1000).toLocaleDateString([], { weekday: 'long' });
-  header.appendChild(headerSpacer);
-
-  var headerTrack = document.createElement('div');
-  headerTrack.className = 'guide-header-track';
-  headerTrack.style.width = trackWidth + 'px';
-  for (var t = rangeStart; t < rangeEnd; t += 1800) {
-    var label = document.createElement('div');
-    label.className = 'guide-time-label';
-    label.style.left = (minutesFromStart(t) * PX_PER_MIN) + 'px';
-    label.style.width = (30 * PX_PER_MIN) + 'px';
-    label.textContent = fmtTime(t);
-    headerTrack.appendChild(label);
-  }
-  header.appendChild(headerTrack);
-  container.appendChild(header);
-
-  function matchesFilter(ch) {
-    if (favoritesCheck.checked && !ch.Favorite) return false;
-    if (!showHiddenCheck.checked && ch.Hidden) return false;
-    return true;
-  }
-
-  function updateCount(displayed) {
-    countEl.textContent = displayed + ' channel' + (displayed === 1 ? '' : 's');
-  }
-
-  function renderRows() {
-    container.querySelectorAll('.guide-row').forEach(function (row) { row.remove(); });
-
-    var displayed = 0;
-    data.forEach(function (ch) {
-      if (!matchesFilter(ch)) return;
-      displayed += 1;
-
-    var row = document.createElement('div');
-    row.className = 'guide-row';
-
-    var cell = document.createElement('div');
-    cell.className = 'guide-channel-cell';
-    cell.title = 'Watch ' + ch.GuideName;
-    cell.onclick = function () { prewarmAndNavigate(ch.GuideNumber); };
-    var num = document.createElement('div');
-    num.className = 'guide-channel-number';
-    num.textContent = ch.GuideNumber + (ch.Favorite ? ' ★' : '');
-    cell.appendChild(num);
-    if (ch.ImageURL) {
-      var img = document.createElement('img');
-      img.src = ch.ImageURL;
-      img.alt = ch.GuideName;
-      img.loading = 'lazy';
-      cell.appendChild(img);
-    } else {
-      var name = document.createElement('div');
-      name.style.fontSize = '.7rem';
-      name.textContent = ch.GuideName;
-      cell.appendChild(name);
-    }
-    row.appendChild(cell);
-
-    var track = document.createElement('div');
-    track.className = 'guide-track';
-    track.style.width = trackWidth + 'px';
-
-    (ch.Guide || []).forEach(function (airing) {
-      if (airing.EndTime <= rangeStart || airing.StartTime >= rangeEnd) return;
-      var start = Math.max(airing.StartTime, rangeStart);
-      var end = Math.min(airing.EndTime, rangeEnd);
-      var left = minutesFromStart(start) * PX_PER_MIN;
-      var width = (end - start) / 60 * PX_PER_MIN;
-      var block = document.createElement('div');
-      block.className = 'guide-block' + (airing.StartTime <= now && now < airing.EndTime ? ' is-now' : '');
-      block.style.left = left + 'px';
-      block.style.width = Math.max(width - 2, 20) + 'px';
-      block.title = airing.Title + ' (' + fmtTime(airing.StartTime) + ' - ' + fmtTime(airing.EndTime) + ')';
-      block.textContent = airing.Title;
-      block.onclick = function () { prewarmAndNavigate(ch.GuideNumber); };
-      track.appendChild(block);
-    });
-
-    row.appendChild(track);
-    container.appendChild(row);
-    });
-
-    updateCount(displayed);
-  }
-
-  var nowLine = document.createElement('div');
-  nowLine.className = 'guide-now-line';
-  nowLine.style.left = (colWidth + minutesFromStart(now) * PX_PER_MIN) + 'px';
-  container.style.position = 'relative';
-  container.appendChild(nowLine);
-
-  renderRows();
-
-  // Scroll the "now" line into view once on initial render.
-  if (!hasAutoScrolledToNow) {
-    scrollParent.scrollLeft = Math.max(0, minutesFromStart(now) * PX_PER_MIN - 60);
-    hasAutoScrolledToNow = true;
-  }
-
-  [favoritesCheck, showHiddenCheck].forEach(function (el) {
-    el.addEventListener('change', renderRows);
-  });
-})();
-</script>
-
+<%- include('_watch_overlay') %>
+<script id="guide-data" type="application/json"><%- JSON.stringify({ channels, now }).replace(/</g, '\\u003c') %></script>
+<script src="/js/guide-grid.js?v=<%= assetVersion %>" defer></script>
+<script src="/js/guide.js?v=<%= assetVersion %>" defer></script>
 <%- include('_footer') %>

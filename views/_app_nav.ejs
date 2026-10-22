@@ -1,0 +1,27 @@
+<a class="skip-link" href="#main-content">Skip to content</a>
+<header class="app-header">
+  <div class="app-header-inner">
+    <a href="/" class="app-brand" aria-label="LunaTV home">
+      <svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true"><path d="M24 22.5A12 12 0 0 1 10 5a12 12 0 1 0 14 17.5Z" fill="currentColor"/></svg>
+      <span>Luna<span class="brand-tv">TV</span></span>
+    </a>
+    <nav class="app-nav" aria-label="Main navigation">
+      <a href="/guide" class="app-nav-link<%= !admin && currentPath !== '/recordings' && !currentPath.startsWith('/recordings/') ? ' is-current' : '' %>"<% if (!admin && !currentPath.startsWith('/recordings')) { %> aria-current="page"<% } %>><i class="bi bi-tv" aria-hidden="true"></i>Live TV</a>
+      <a href="/recordings" class="app-nav-link<%= currentPath.startsWith('/recordings') ? ' is-current' : '' %>"<% if (currentPath.startsWith('/recordings')) { %> aria-current="page"<% } %>><i class="bi bi-collection-play" aria-hidden="true"></i>Recordings</a>
+    </nav>
+    <div class="app-header-actions">
+      <a href="/admin" class="icon-link<%= admin ? ' is-current' : '' %>" aria-label="Device administration" title="Device administration"><i class="bi bi-gear" aria-hidden="true"></i></a>
+      <md-icon-button id="theme-toggle" aria-label="Switch theme" title="Switch theme"><i class="bi bi-moon" aria-hidden="true"></i></md-icon-button>
+    </div>
+  </div>
+</header>
+<% if (admin) { %>
+  <nav class="admin-nav" aria-label="Administration">
+    <div class="admin-nav-inner">
+      <% [['/admin', 'Overview', 'bi-house'], ['/admin/channels', 'Channels', 'bi-list-ul'], ['/admin/scan', 'Scan', 'bi-broadcast'], ['/admin/status', 'Status', 'bi-reception-4']].forEach(function(link) { %>
+        <a href="<%= link[0] %>" class="admin-nav-link<%= currentPath === link[0] || (link[0] === '/admin' && currentPath === '/admin/') ? ' is-current' : '' %>"<% if (currentPath === link[0] || (link[0] === '/admin' && currentPath === '/admin/')) { %> aria-current="page"<% } %>><i class="bi <%= link[2] %>" aria-hidden="true"></i><%= link[1] %></a>
+      <% }); %>
+      <a href="<%= deviceSystemLogUrl %>" class="admin-nav-link admin-log-link" target="_blank" rel="noopener">Device log<i class="bi bi-box-arrow-up-right" aria-hidden="true"></i><span class="visually-hidden"> (opens in a new tab)</span></a>
+    </div>
+  </nav>
+<% } %>

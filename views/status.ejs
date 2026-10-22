@@ -1,7 +1,4 @@
-<%- include('_header', { title: 'System Status' }) %>
-
-<h1>System Status</h1>
-
+<%- include('_header', { title: 'Tuner status' }) %>
+<div class="page-heading"><div><h1>Tuner status</h1><p class="page-description">Active channels and signal quality. Updates every few seconds.</p></div></div>
 <%- include('_tuner_status', { tuners, error }) %>
-
 <%- include('_footer') %>
