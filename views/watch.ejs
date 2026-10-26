@@ -52,6 +52,8 @@
     var video = document.getElementById('player');
     var status = document.getElementById('player-status');
     var captionsStatus = document.getElementById('captions-status');
+    var statusOverlay = document.querySelector('.watch-fullbleed-overlay');
+    var overlayHideTimer = null;
     var recordBtn = document.getElementById('record-btn');
     var recordStatus = document.getElementById('record-status');
     var profile = chooseProfile();
@@ -63,8 +65,26 @@
     var READY_RETRY_LIMIT = 4;
     var heartbeatTimer = null;
 
-    function setStatus(text) { status.textContent = text; }
+    function showStatusOverlay() {
+      if (!statusOverlay) return;
+      clearTimeout(overlayHideTimer);
+      statusOverlay.classList.remove('is-hidden');
+    }
+
+    function setStatus(text) {
+      status.textContent = text;
+      if (text !== 'Live') showStatusOverlay();
+    }
     function setCaptionsStatus(text) { captionsStatus.textContent = text; }
+
+    if (statusOverlay) {
+      video.addEventListener('playing', function () {
+        clearTimeout(overlayHideTimer);
+        overlayHideTimer = setTimeout(function () {
+          statusOverlay.classList.add('is-hidden');
+        }, 2500);
+      });
+    }
 
     function addWebVttTrack(url) {
       if (!video) return;

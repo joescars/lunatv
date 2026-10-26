@@ -113,6 +113,19 @@ try {
     assert.equal(await page.locator('#watch-overlay').evaluate(el => el.open), true);
     await page.locator('#watch-overlay-close').click();
   });
+  await check('Embedded playback status bar auto-hides after playback starts', async () => {
+    await goto('/watch/2.1?embedded=1');
+    const statusOverlay = page.locator('.watch-fullbleed-overlay');
+    await page.waitForFunction(() => document.getElementById('player-status').textContent.includes('Tuner is busy'));
+    assert.equal(await statusOverlay.isVisible(), true, 'Startup errors should remain visible');
+    await page.locator('#player').evaluate(video => video.dispatchEvent(new Event('playing')));
+    await page.waitForFunction(() => {
+      const overlay = document.querySelector('.watch-fullbleed-overlay');
+      return overlay && overlay.classList.contains('is-hidden') && getComputedStyle(overlay).visibility === 'hidden';
+    }, null, { timeout: 4000 });
+    assert.equal(await statusOverlay.isVisible(), false);
+    await page.screenshot({ path: path.join(screenshots, 'embedded-watch-overlay-hidden.png') });
+  });
   await check('Theme preference survives viewer/admin navigation', async () => {
     await goto('/guide');
     const old = await page.locator('html').getAttribute('data-bs-theme');
