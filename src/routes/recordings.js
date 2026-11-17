@@ -99,6 +99,13 @@ router.post('/recordings/:id/:profile/start', (req, res) => {
   res.status(202).end();
 });
 
+router.post('/recordings/:id/:profile/stop', (req, res) => {
+  const { id, profile } = req.params;
+  if (!ID_RE.test(id) || !recordingStream.PROFILES[profile]) return res.status(400).send('Invalid request');
+  recordingStream.stopById(id, profile);
+  res.status(204).end();
+});
+
 router.get('/recordings/:id/:profile/ready', (req, res) => {
   const { id, profile } = req.params;
   if (!ID_RE.test(id) || !recordingStream.PROFILES[profile]) return res.status(400).send('Invalid request');

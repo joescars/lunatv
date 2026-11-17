@@ -39,6 +39,9 @@
         setTimeout(waitForReady, 500);
       }).catch(function () { setTimeout(waitForReady, 500); });
     }
+    window.addEventListener('pagehide', function () {
+      fetch(base + 'stop', { method: 'POST', keepalive: true }).catch(function () {});
+    });
     fetch(base + 'start', { method: 'POST' }).then(waitForReady).catch(function () { setStatus('Unable to prepare recording.'); });
   })();
 </script>

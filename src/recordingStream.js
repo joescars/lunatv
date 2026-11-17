@@ -62,12 +62,16 @@ function start(id, sourceUrl, profile) {
     stderr = `${stderr}${err && err.message ? err.message : 'ffmpeg failed to spawn'}\n`.slice(-4000);
     console.error(`[recording-stream] ffmpeg error id=${id}: ${err && err.message}`);
     session.spawnError = err && err.message ? err.message : 'ffmpeg failed to spawn';
+    if (sessions.get(sessionKey) === session) fs.rmSync(dir, { recursive: true, force: true });
     // 'exit' never fires on spawn failure; drop the failed session after the idle window.
     setTimeout(() => {
       if (sessions.get(sessionKey) === session) sessions.delete(sessionKey);
     }, IDLE_TIMEOUT_MS).unref();
   });
   process.on('exit', () => {
+    // Only the session that still owns the dir may remove it; a restart of the
+    // same id/profile replaces the session and recreates the dir.
+    if (sessions.get(sessionKey) === session) fs.rmSync(dir, { recursive: true, force: true });
     setTimeout(() => {
       if (sessions.get(sessionKey) === session) sessions.delete(sessionKey);
     }, IDLE_TIMEOUT_MS);
@@ -79,6 +83,10 @@ function get(id, profile) {
   const session = sessions.get(key(id, profile));
   if (session) session.lastAccess = Date.now();
   return session || null;
+}
+
+function stopById(id, profile) {
+  stop(sessions.get(key(id, profile)));
 }
 
 function isReady(id, profile) {
@@ -97,4 +105,4 @@ setInterval(() => {
   }
 }, 15_000).unref();
 
-module.exports = { start, get, isReady, normalizeProfile, PROFILES };
+module.exports = { start, stopById, get, isReady, normalizeProfile, PROFILES };
