@@ -5,6 +5,8 @@ const os = require('os');
 
 const ROOT = path.join(os.tmpdir(), 'hdhomerun-web-recordings');
 const IDLE_TIMEOUT_MS = 60_000;
+// A recording that transcoded to EOF is a complete VOD; keep it seekable longer than a live session.
+const FINISHED_IDLE_MS = 10 * 60_000;
 const PROFILES = {
   low: { videoBitrate: '1800k', maxrate: '2200k', bufsize: '3600k', audioBitrate: '96k' },
   medium: { videoBitrate: '3200k', maxrate: '4200k', bufsize: '6400k', audioBitrate: '128k' },
@@ -20,9 +22,21 @@ function key(id, profile) {
   return `${id}:${normalizeProfile(profile)}`;
 }
 
-function stop(session) {
-  if (!session || session.process.exitCode !== null || session.process.killed) return;
-  session.process.kill('SIGTERM');
+function finished(session) {
+  return session.process.exitCode === 0 && fs.existsSync(session.playlist);
+}
+
+function stop(session, sessionKey) {
+  if (!session) return;
+  if (session.process.exitCode === null) {
+    if (!session.process.killed) session.process.kill('SIGTERM');
+    return;
+  }
+  // Already exited (e.g. finished VOD kept for seeking): stop means release it.
+  if (sessionKey && sessions.get(sessionKey) === session) {
+    fs.rmSync(session.dir, { recursive: true, force: true });
+    sessions.delete(sessionKey);
+  }
 }
 
 function start(id, sourceUrl, profile) {
@@ -30,6 +44,10 @@ function start(id, sourceUrl, profile) {
   const sessionKey = key(id, normalizedProfile);
   const existing = sessions.get(sessionKey);
   if (existing && !existing.spawnError && existing.process.exitCode === null && !existing.process.killed) {
+    existing.lastAccess = Date.now();
+    return existing;
+  }
+  if (existing && !existing.spawnError && finished(existing)) {
     existing.lastAccess = Date.now();
     return existing;
   }
@@ -47,8 +65,9 @@ function start(id, sourceUrl, profile) {
     '-b:v', config.videoBitrate, '-maxrate', config.maxrate, '-bufsize', config.bufsize,
     '-g', '30', '-force_key_frames', 'expr:eq(n,0)+gte(t,n_forced*1)',
     '-c:a', 'aac', '-b:a', config.audioBitrate, '-ac', '2',
-    '-f', 'hls', '-hls_time', '2', '-hls_list_size', '8',
-    '-hls_flags', 'delete_segments+independent_segments+omit_endlist',
+    '-f', 'hls', '-hls_time', '2', '-hls_list_size', '0',
+    '-hls_playlist_type', 'event',
+    '-hls_flags', 'independent_segments',
     '-hls_segment_filename', path.join(dir, 'segment%d.ts'),
     playlist,
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
@@ -68,13 +87,16 @@ function start(id, sourceUrl, profile) {
       if (sessions.get(sessionKey) === session) sessions.delete(sessionKey);
     }, IDLE_TIMEOUT_MS).unref();
   });
-  process.on('exit', () => {
+  process.on('exit', (code) => {
+    // Clean EOF: keep the finished playlist (EXT-X-ENDLIST) and segments so the
+    // player can finish and seek; the idle sweep / stop removes them.
+    if (code === 0) return;
     // Only the session that still owns the dir may remove it; a restart of the
     // same id/profile replaces the session and recreates the dir.
     if (sessions.get(sessionKey) === session) fs.rmSync(dir, { recursive: true, force: true });
     setTimeout(() => {
       if (sessions.get(sessionKey) === session) sessions.delete(sessionKey);
-    }, IDLE_TIMEOUT_MS);
+    }, IDLE_TIMEOUT_MS).unref();
   });
   return session;
 }
@@ -86,7 +108,8 @@ function get(id, profile) {
 }
 
 function stopById(id, profile) {
-  stop(sessions.get(key(id, profile)));
+  const sessionKey = key(id, profile);
+  stop(sessions.get(sessionKey), sessionKey);
 }
 
 function isReady(id, profile) {
@@ -100,8 +123,9 @@ function isReady(id, profile) {
 
 setInterval(() => {
   const now = Date.now();
-  for (const session of sessions.values()) {
-    if (now - session.lastAccess > IDLE_TIMEOUT_MS) stop(session);
+  for (const [sessionKey, session] of sessions) {
+    const limit = session.process.exitCode === 0 ? FINISHED_IDLE_MS : IDLE_TIMEOUT_MS;
+    if (now - session.lastAccess > limit) stop(session, sessionKey);
   }
 }, 15_000).unref();
 
