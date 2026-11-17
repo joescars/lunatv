@@ -62,6 +62,7 @@ function start(id, sourceUrl, profile) {
     stderr = `${stderr}${err && err.message ? err.message : 'ffmpeg failed to spawn'}\n`.slice(-4000);
     console.error(`[recording-stream] ffmpeg error id=${id}: ${err && err.message}`);
     session.spawnError = err && err.message ? err.message : 'ffmpeg failed to spawn';
+    if (sessions.get(sessionKey) === session) fs.rmSync(dir, { recursive: true, force: true });
     // 'exit' never fires on spawn failure; drop the failed session after the idle window.
     setTimeout(() => {
       if (sessions.get(sessionKey) === session) sessions.delete(sessionKey);
