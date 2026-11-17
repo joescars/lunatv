@@ -5,8 +5,19 @@ sub init()
     m.task = invalid
     m.deleteTask = invalid
     m.items = []
+    m.signature = ""
     m.list.observeField("itemSelected", "onSelected")
     m.refreshTimer.observeField("fire", "onRefreshTimerFire")
+    ' MainScene.pushScreen hides this screen (visible=false) when a child screen
+    ' (the recording player) opens. Stop polling while hidden so a refresh can
+    ' never steal focus from the player.
+    m.top.observeField("visible", "onVisibleChange")
+end sub
+
+sub onVisibleChange(event as object)
+    if event.getData() <> true
+        m.refreshTimer.control = "stop"
+    end if
 end sub
 
 sub onScreenFocus()
@@ -21,7 +32,7 @@ end sub
 
 sub loadRecordings()
     if m.task <> invalid then return
-    m.status.text = "Loading recordings..."
+    if m.items.Count() = 0 then m.status.text = "Loading recordings..."
     task = CreateObject("roSGNode", "RecordingsTask")
     task.serverUrl = m.top.serverUrl
     task.method = "list"
@@ -37,6 +48,24 @@ sub onResult(event as object)
         m.status.text = "DVR unavailable: " + errorText(result)
         return
     end if
+
+    sig = ""
+    for each group in result.recordings
+        for each episode in group.episodes
+            epId = ""
+            if episode.id <> invalid then epId = episode.id.ToStr()
+            sig = sig + "|" + epId + ":" + (episode.recording = true).ToStr()
+        end for
+    end for
+    ' Unchanged data: keep the existing list (and its focused row) untouched.
+    if sig = m.signature and m.items.Count() > 0
+        m.status.text = ""
+        if m.top.visible = true then m.list.setFocus(true)
+        return
+    end if
+    m.signature = sig
+    focusedIndex = m.list.itemFocused
+    if focusedIndex < 0 then focusedIndex = 0
 
     m.items = []
     content = CreateObject("roSGNode", "ContentNode")
@@ -67,7 +96,11 @@ sub onResult(event as object)
         m.status.text = "No recordings"
     else
         m.status.text = ""
-        m.list.setFocus(true)
+        if focusedIndex >= m.items.Count() then focusedIndex = m.items.Count() - 1
+        m.list.jumpToItem = focusedIndex
+        ' Only take focus when this screen is the visible top screen; a
+        ' background refresh must not steal focus from a child screen.
+        if m.top.visible = true then m.list.setFocus(true)
     end if
 end sub
 
@@ -110,6 +143,7 @@ sub onDeleteResult(event as object)
         return
     end if
     m.items = []
+    m.signature = ""
     m.list.content = invalid
     loadRecordings()
 end sub
