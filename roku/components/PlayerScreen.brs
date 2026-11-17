@@ -298,6 +298,11 @@ sub showChannelNotice()
     end if
 end sub
 
+sub showChannelNoticeStatus(message as string)
+    showChannelNotice()
+    if m.channelNoticeDetail <> invalid then m.channelNoticeDetail.text = message
+end sub
+
 sub hideChannelNotice()
     if m.channelNotice <> invalid then m.channelNotice.visible = false
     if m.infoHideTimer <> invalid then m.infoHideTimer.control = "stop"
