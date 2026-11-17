@@ -880,6 +880,23 @@ async function ensureSession(channel, codec, profile) {
   return session;
 }
 
+// Like ensureSession(), but never creates a session: resolves null when none
+// exists (only start() may spawn ffmpeg). Used by GET playlist/segment routes.
+async function attachSession(channel, codec, profile) {
+  const key = sessionKey(channel, codec, normalizeProfile(profile));
+  const session = sessions.get(key);
+  if (!session) return null;
+  session.lastAccess = Date.now();
+  try {
+    await waitForPlaylist(session);
+    startWebVttSidecar(session);
+  } catch (err) {
+    stopSession(channel, codec, profile, 'startup_error');
+    throw err;
+  }
+  return session;
+}
+
 function touch(channel, codec, profile, source = 'access') {
   const session = sessions.get(sessionKey(channel, codec, profile));
   if (!session) return;
@@ -1014,6 +1031,7 @@ setInterval(() => {
 
 module.exports = {
   ensureSession,
+  attachSession,
   start,
   isReady,
   touch,

@@ -147,7 +147,9 @@ async function streamFile(req, res) {
   if (!parsed) return res.status(400).send('Invalid request');
 
   try {
-    const session = await stream.ensureSession(parsed.channel, parsed.codec, parsed.profile);
+    // GET never creates a session; clients must POST /start first.
+    const session = await stream.attachSession(parsed.channel, parsed.codec, parsed.profile);
+    if (!session) return res.status(404).send('No active session; POST /start first');
     stream.touch(parsed.channel, parsed.codec, parsed.profile);
     const filePath = path.join(session.dir, parsed.file);
     if (!fs.existsSync(filePath)) return res.status(404).end();
