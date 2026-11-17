@@ -4,6 +4,7 @@ const compression = require('compression');
 
 const hdhr = require('./src/hdhomerun');
 const requestTiming = require('./src/middleware/requestTiming');
+const sameOrigin = require('./src/middleware/sameOrigin');
 const indexRoutes = require('./src/routes/index');
 const channelsRoutes = require('./src/routes/channels');
 const scanRoutes = require('./src/routes/scan');
@@ -40,6 +41,7 @@ app.use((req, res, next) => {
 // at the root. Device-setup/management pages live under /admin - they're
 // not gone, just no longer the front door (see CHANGELOG for the LunaTV
 // mobile client redesign).
+app.use(sameOrigin);
 app.use('/admin', indexRoutes);
 app.use('/admin', channelsRoutes);
 app.use('/admin', scanRoutes);
