@@ -134,7 +134,7 @@ at `http://<roku-ip>`, user `rokudev`):
 - **DVR:** Press **Play** on the guide to open recordings. Press **OK** to play
   a recording, **Options** to delete a completed recording or stop an active
   one, and **Back** to return. Active entries are labeled `RECORDING NOW` and
-  refresh every 15 seconds. Stopping discards the partial recording. While
+  refresh every 15 seconds while the list is on screen (paused during playback). Stopping discards the partial recording. While
   watching live TV, press **Down** to schedule the current airing; a notice and
   `REC` badge confirm a successful request. DVR requires the server's
   `RECORD_ENGINE_HOST` configuration.

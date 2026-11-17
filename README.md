@@ -124,6 +124,7 @@ The `.env` values above configure the app. `HDHOMERUN_HOST` is required; use the
 | `SOURCE_CAPTION_PROBE` | `off`       | Enables raw-input ffprobe caption probing in diagnostics. Keep `off` unless actively debugging caption ingest. |
 | `RECORD_ENGINE_HOST` | —          | Optional. LAN IP/hostname of a separately-run [HDHomeRun RECORD](https://info.hdhomerun.com/info/dvr) engine — enables recording, browsing, playback, and deletion at `/recordings`. Leave unset to disable DVR controls. Must be a LAN address, not `localhost`, even if the engine runs on the same machine — same reasoning as `HDHOMERUN_HOST` above. |
 | `RECORD_ENGINE_PORT` | `37899`     | Port the RECORD engine's local HTTP API listens on. |
+| `STREAM_MAX_SESSIONS` | `4`        | Fallback cap on concurrent live sessions, used only when the device doesn't report `TunerCount`. Starts beyond the cap return 503. |
 
 You can find your device's current IP via its own web UI, your router's DHCP client list, or `avahi-resolve -n hdhomerun.local` on a machine with mDNS support. A DHCP reservation for the device is recommended so the IP doesn't change.
 
@@ -199,9 +200,11 @@ useful for any other client):
 | Endpoint | Purpose |
 |---|---|
 | `GET /api/guide` | Channels with now/next programs, pre-shaped for a TV guide: non-overlapping program times, unsubscribed/hidden channels filtered out, no null fields. |
-| `POST /stream/<ch>/<codec>[/<profile>]/start` | Begin tuning/transcoding a channel (returns 202 immediately). `codec` is `h264`, `hevc`, or `direct`; `profile` is `low`, `medium` (default), or `high`. Browsers use H.264; HEVC and Direct are Roku options. |
+| `POST /stream/<ch>/<codec>[/<profile>]/start` | Begin tuning/transcoding a channel (returns 202 immediately). `codec` is `h264`, `hevc`, or `direct`; `profile` is `low`, `medium` (default), or `high`. Browsers use H.264; HEVC and Direct are Roku options. Returns 404 for a channel not in the lineup (skipped if the lineup can't be fetched) and 503 when all tuners are in use; both carry `{"error":"..."}`. |
 | `GET /stream/<ch>/<codec>[/<profile>]/ready` | `{"ready":bool,"failed":bool,"error":"..."}` — poll until `ready` is true. Stop polling when `failed` is true: ffmpeg exited or could not be started, and `error` holds its stderr tail (kept for 30s, cleared by the next `/start`). |
-| `GET /stream/<ch>/<codec>[/<profile>]/stream.m3u8` | The HLS playlist, once ready. |
-| `POST /recordings/<id>/<profile>/start` | Begin transcoding a DVR recording to HLS (same start → poll → playlist handshake as live TV). |
+| `GET /stream/<ch>/<codec>[/<profile>]/stream.m3u8` | The HLS playlist, once ready. Playlist and segment requests never start a session: without a prior `/start` they return 404. |
+| `POST /recordings/<id>/<profile>/start` | Begin transcoding a DVR recording to HLS (same start → poll → playlist handshake as live TV). Returns 404 for an unknown recording and 502 if the RECORD engine is unreachable. The playlist is an EVENT playlist that keeps every segment, so it can be seeked; a finished transcode is reused by the next `/start`. |
 | `GET /recordings/<id>/<profile>/ready` | `{"ready":bool,"error":"..."}` — `error` is set once the transcoder has failed or exited. |
-| `POST /recordings/<id>/<profile>/stop` | Stop recording playback and delete its temporary HLS files (204). The browser player calls it on `pagehide`; idle sessions are also stopped after 60s. |
+| `POST /recordings/<id>/<profile>/stop` | Stop recording playback and delete its temporary HLS files (204). The browser player calls it on `pagehide`. Otherwise a running transcode is removed after 60s without requests, and a finished one after 10 minutes. Segments accumulate in the temp dir until then (about 3 GB for a 2-hour recording at `medium`). |
+
+State-changing requests (`POST`) are rejected with 403 when they come from another site: `Sec-Fetch-Site: cross-site`, or an `Origin` whose host matches neither `Host` nor `X-Forwarded-Host`. Requests without these headers (Roku, curl) are allowed. Behind a reverse proxy, forward the original `Host` or set `X-Forwarded-Host`.
