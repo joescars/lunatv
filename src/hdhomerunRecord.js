@@ -18,7 +18,10 @@ async function fetchWithTimeout(url, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    // Read the body before the timer is cleared so a mid-body stall aborts too.
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    const text = await res.text();
+    return { res, text };
   } finally {
     clearTimeout(timeout);
   }
@@ -52,8 +55,7 @@ async function recordCurrentAiring({ seriesId, channel, startTime }) {
   // The API accepts GET for read-only Cmd=list calls but rejects Cmd=add
   // with a bare 400 unless sent as POST (confirmed empirically - the docs
   // don't specify a method).
-  const res = await fetchWithTimeout(`${API_BASE}/api/recording_rules?${params.toString()}`, { method: 'POST' });
-  const text = await res.text();
+  const { res, text } = await fetchWithTimeout(`${API_BASE}/api/recording_rules?${params.toString()}`, { method: 'POST' });
   if (!res.ok) {
     throw new Error(`Recording rule request failed: ${res.status} ${res.statusText} ${text}`);
   }
@@ -84,7 +86,7 @@ async function stopRecording(recording) {
       Cmd: 'delete',
       RecordingRuleID: String(rule.RecordingRuleID),
     });
-    const res = await fetchWithTimeout(`${API_BASE}/api/recording_rules?${params.toString()}`, { method: 'POST' });
+    const { res } = await fetchWithTimeout(`${API_BASE}/api/recording_rules?${params.toString()}`, { method: 'POST' });
     if (!res.ok) throw new Error(`Recording rule delete failed: ${res.status} ${res.statusText}`);
   }
   await fetchWithTimeout(`${RECORD_BASE}/recording_events.post?sync`, { method: 'POST' });
@@ -95,9 +97,9 @@ async function stopRecording(recording) {
 }
 
 async function getJson(url) {
-  const res = await fetchWithTimeout(url);
+  const { res, text } = await fetchWithTimeout(url);
   if (!res.ok) throw new Error(`RECORD engine request failed: ${res.status} ${res.statusText}`);
-  return res.json();
+  return JSON.parse(text);
 }
 
 function recordingId(playUrl) {
@@ -150,7 +152,7 @@ async function deleteRecording(recording) {
   const url = new URL(recording.CmdURL);
   if (url.origin !== RECORD_BASE) throw new Error('Recording command URL is invalid');
   url.searchParams.set('cmd', 'delete');
-  const res = await fetchWithTimeout(url, { method: 'POST' });
+  const { res } = await fetchWithTimeout(url, { method: 'POST' });
   if (!res.ok) throw new Error(`Delete recording request failed: ${res.status} ${res.statusText}`);
 }
 

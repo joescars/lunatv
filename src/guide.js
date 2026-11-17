@@ -17,7 +17,8 @@ async function getGuide({ duration = 6 } = {}) {
     if (!res.ok) {
       throw new Error(`Guide request failed: ${res.status} ${res.statusText}`);
     }
-    return res.json();
+    // Await inside try so the timeout also covers reading the body.
+    return await res.json();
   } finally {
     clearTimeout(timeout);
   }
