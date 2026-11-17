@@ -180,6 +180,15 @@ try {
     await page.getByText('Recording is not configured on this server.').waitFor();
     await scenario('normal');
   });
+  await check('Cross-origin mutating requests are rejected', async () => {
+    const post = headers => fetch(origin + '/admin/scan/abort', { method: 'POST', headers }).then(r => r.status);
+    assert.equal(await post({ Origin: 'https://evil.example' }), 403);
+    assert.equal(await post({ Origin: 'null' }), 403);
+    assert.equal(await post({ 'Sec-Fetch-Site': 'cross-site' }), 403);
+    assert.equal(await post({ Origin: `http://localhost:${port}` }), 403);
+    assert.notEqual(await post({ Origin: origin, 'Sec-Fetch-Site': 'same-origin' }), 403);
+    assert.notEqual(await post({}), 403);
+  });
   await check('No uncaught browser exceptions', async () => assert.deepEqual(pageErrors, []));
 } finally {
   await browser?.close();
