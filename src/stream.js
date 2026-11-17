@@ -690,6 +690,7 @@ function spawnFfmpeg(channel, codec, profile) {
     metrics.sessionsExited += 1;
     metrics.sessionsStoppedError += 1;
     if (sessions.get(key) === session) sessions.delete(key);
+    failedSessions.set(key, { error: stderrTail, expires: Date.now() + FAILED_SESSION_TTL_MS });
     if (isProcessAlive(session.webvttProcess)) {
       session.webvttProcess.kill('SIGTERM');
     }
