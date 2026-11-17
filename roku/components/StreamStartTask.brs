@@ -31,6 +31,16 @@ sub doStart()
     ' but we treat any 2xx as success.
     postResp = Net_HttpPost(startUrl, 10000)
     if postResp.success <> true
+        ' 404 (unknown channel) / 503 (all tuner slots in use) carry {"error": "..."}.
+        if postResp.code = 404 or postResp.code = 503
+            errJson = ParseJson(postResp.body)
+            if errJson <> invalid and errJson.error <> invalid and errJson.error <> ""
+                reason = "signal"
+                if postResp.code = 503 then reason = "tuner_busy"
+                m.top.result = { state: "failed", reason: reason, error: errJson.error }
+                return
+            end if
+        end if
         m.top.result = {
             state: "failed"
             reason: "network"

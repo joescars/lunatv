@@ -6,6 +6,7 @@ const stream = require('../stream');
 const hdhr = require('../hdhomerun');
 const guide = require('../guide');
 const record = require('../hdhomerunRecord');
+const cache = require('../cache');
 
 const router = express.Router();
 
@@ -94,10 +95,62 @@ router.post('/watch/:channel/record', async (req, res) => {
 // :codec picks the ffmpeg encoder - h264 for browsers (hls.js's TS demuxer
 // can't parse HEVC NAL units), hevc for the Roku client, which decodes it
 // natively via its Video node. See CLAUDE.md.
-function startSession(req, res) {
+const LINEUP_TTL_MS = 30_000;
+const TUNER_COUNT_TTL_MS = 5 * 60_000;
+const DEFAULT_MAX_SESSIONS = 4;
+
+// Returns the lineup (including hidden channels, via getLineup's ?show=all) or
+// null when the device can't be reached.
+async function getCachedLineup() {
+  const cached = cache.get('lineup:all');
+  if (cached) return cached;
+  try {
+    const lineup = await hdhr.getLineup();
+    if (Array.isArray(lineup)) {
+      cache.set('lineup:all', lineup, LINEUP_TTL_MS);
+      return lineup;
+    }
+  } catch (err) {
+    console.warn(`[stream] lineup unavailable, skipping channel validation: ${err.message}`);
+  }
+  return null;
+}
+
+// Live sessions each hold a tuner, so cap at the device's TunerCount when it
+// reports one; otherwise STREAM_MAX_SESSIONS (default 4).
+async function getMaxSessions() {
+  let tuners = cache.get('device:tuners');
+  if (!tuners) {
+    try {
+      const info = await hdhr.getDeviceInfo();
+      tuners = Number(info && info.TunerCount);
+      if (tuners > 0) cache.set('device:tuners', tuners, TUNER_COUNT_TTL_MS);
+    } catch (err) {
+      tuners = 0;
+    }
+  }
+  if (tuners > 0) return tuners;
+  const fallback = parseInt(process.env.STREAM_MAX_SESSIONS, 10);
+  return fallback > 0 ? fallback : DEFAULT_MAX_SESSIONS;
+}
+
+async function startSession(req, res) {
   const parsed = parseStreamRequest(req);
   if (!parsed) return res.status(400).send('Invalid request');
-  stream.start(parsed.channel, parsed.codec, parsed.profile);
+
+  // Fail open if the device is unreachable: a lineup outage shouldn't block
+  // playback, ffmpeg will report the real failure through /ready.
+  const lineup = await getCachedLineup();
+  if (lineup && !lineup.some((c) => c.GuideNumber === parsed.channel)) {
+    return res.status(404).json({ error: `Channel ${parsed.channel} not found` });
+  }
+
+  try {
+    stream.start(parsed.channel, parsed.codec, parsed.profile, await getMaxSessions());
+  } catch (err) {
+    if (err instanceof stream.SessionLimitError) return res.status(503).json({ error: err.message });
+    throw err;
+  }
   res.status(202).end();
 }
 
