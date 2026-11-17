@@ -29,7 +29,7 @@ function start(id, sourceUrl, profile) {
   const normalizedProfile = normalizeProfile(profile);
   const sessionKey = key(id, normalizedProfile);
   const existing = sessions.get(sessionKey);
-  if (existing && existing.process.exitCode === null && !existing.process.killed) {
+  if (existing && !existing.spawnError && existing.process.exitCode === null && !existing.process.killed) {
     existing.lastAccess = Date.now();
     return existing;
   }
@@ -58,6 +58,15 @@ function start(id, sourceUrl, profile) {
   });
   const session = { process, dir, playlist, lastAccess: Date.now(), stderr: () => stderr };
   sessions.set(sessionKey, session);
+  process.on('error', (err) => {
+    stderr = `${stderr}${err && err.message ? err.message : 'ffmpeg failed to spawn'}\n`.slice(-4000);
+    console.error(`[recording-stream] ffmpeg error id=${id}: ${err && err.message}`);
+    session.spawnError = err && err.message ? err.message : 'ffmpeg failed to spawn';
+    // 'exit' never fires on spawn failure; drop the failed session after the idle window.
+    setTimeout(() => {
+      if (sessions.get(sessionKey) === session) sessions.delete(sessionKey);
+    }, IDLE_TIMEOUT_MS).unref();
+  });
   process.on('exit', () => {
     setTimeout(() => {
       if (sessions.get(sessionKey) === session) sessions.delete(sessionKey);
@@ -75,6 +84,7 @@ function get(id, profile) {
 function isReady(id, profile) {
   const session = get(id, profile);
   if (!session) return { ready: false, error: 'Recording stream has not started' };
+  if (session.spawnError) return { ready: false, error: session.spawnError };
   if (fs.existsSync(session.playlist)) return { ready: true };
   if (session.process.exitCode !== null) return { ready: false, error: session.stderr() || 'Transcoder stopped' };
   return { ready: false };

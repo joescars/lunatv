@@ -310,6 +310,18 @@ function startWebVttSidecar(session) {
     };
   });
 
+  proc.on('error', (err) => {
+    const message = err && err.message ? err.message : 'ffmpeg sidecar failed to spawn';
+    console.warn(`[stream] webvtt sidecar error channel=${session.channel}: ${message}`);
+    session.webvtt = {
+      ...session.webvtt,
+      state: 'failed',
+      reason: 'spawn_error',
+      lastUpdateAt: Date.now(),
+      lastError: message,
+    };
+  });
+
   proc.on('exit', (code) => {
     const failed = code !== 0;
     let reason = failed ? 'ffmpeg_exit' : 'ended';
@@ -661,6 +673,25 @@ function spawnFfmpeg(channel, codec, profile) {
         stderrTail = (stderrTail + line + '\n').slice(-4000);
       }
     }
+  });
+
+  // Spawn failures (ENOENT, EAGAIN, EMFILE) emit 'error' and may never emit 'exit'.
+  proc.on('error', (err) => {
+    const message = err && err.message ? err.message : 'ffmpeg failed to spawn';
+    console.error(
+      `[stream] ffmpeg error channel=${channel} codec=${codec} profile=${normalizedProfile}: ${message}`
+    );
+    if (session.exited) return;
+    session.exited = true;
+    session.stopReason = 'startup_error';
+    stderrTail = `${stderrTail}${message}\n`.slice(-4000);
+    metrics.sessionsExited += 1;
+    metrics.sessionsStoppedError += 1;
+    if (sessions.get(key) === session) sessions.delete(key);
+    if (isProcessAlive(session.webvttProcess)) {
+      session.webvttProcess.kill('SIGTERM');
+    }
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 
   proc.on('exit', () => {
