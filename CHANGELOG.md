@@ -4,6 +4,26 @@ All notable changes to this project are documented in this file.
 
 ## 2026-11-17
 
+### Fixed: bug review 2 (#38)
+
+- A segment deleted while it was being served no longer crashes the server; it
+  returns 404 (#22).
+- Playlist and segment GETs no longer start ffmpeg; only `POST /start` creates a
+  session (#25).
+- Live starts reject channels missing from the lineup (404) and are capped at the
+  device's tuner count, or `STREAM_MAX_SESSIONS` (default 4), with 503. Expired
+  failure records are swept. Recording starts check the recording exists (#27).
+- Recording playback uses an EVENT playlist that keeps all segments, so it plays
+  to the end and can be seeked; finished transcodes are kept until stop or
+  10 minutes idle (#24).
+- Cross-site `POST` requests are rejected with 403 (#26).
+- Upstream timeouts to api.hdhomerun.com and the RECORD engine now cover reading
+  the response body (#28).
+- Guide error responses are sent with `Cache-Control: no-store`, so Try again
+  re-requests the guide (#29).
+- Roku: the recordings list no longer refreshes or takes focus while a recording
+  plays, and keeps its position when it refreshes (#23, part of #34).
+
 ### Fixed: bug review (#15)
 
 - The server no longer crashes when ffmpeg cannot be started (missing binary,
