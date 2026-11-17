@@ -200,5 +200,8 @@ useful for any other client):
 |---|---|
 | `GET /api/guide` | Channels with now/next programs, pre-shaped for a TV guide: non-overlapping program times, unsubscribed/hidden channels filtered out, no null fields. |
 | `POST /stream/<ch>/<codec>[/<profile>]/start` | Begin tuning/transcoding a channel (returns 202 immediately). `codec` is `h264`, `hevc`, or `direct`; `profile` is `low`, `medium` (default), or `high`. Browsers use H.264; HEVC and Direct are Roku options. |
-| `GET /stream/<ch>/<codec>[/<profile>]/ready` | `{"ready":bool,"failed":bool,"error":"..."}` — poll until ready. |
+| `GET /stream/<ch>/<codec>[/<profile>]/ready` | `{"ready":bool,"failed":bool,"error":"..."}` — poll until `ready` is true. Stop polling when `failed` is true: ffmpeg exited or could not be started, and `error` holds its stderr tail (kept for 30s, cleared by the next `/start`). |
 | `GET /stream/<ch>/<codec>[/<profile>]/stream.m3u8` | The HLS playlist, once ready. |
+| `POST /recordings/<id>/<profile>/start` | Begin transcoding a DVR recording to HLS (same start → poll → playlist handshake as live TV). |
+| `GET /recordings/<id>/<profile>/ready` | `{"ready":bool,"error":"..."}` — `error` is set once the transcoder has failed or exited. |
+| `POST /recordings/<id>/<profile>/stop` | Stop recording playback and delete its temporary HLS files (204). The browser player calls it on `pagehide`; idle sessions are also stopped after 60s. |
