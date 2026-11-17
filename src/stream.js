@@ -383,6 +383,8 @@ function getDecodeConfig() {
 }
 
 const sessions = new Map();
+const failedSessions = new Map();
+const FAILED_SESSION_TTL_MS = 30000;
 const metrics = {
   sessionsStarted: 0,
   sessionsExited: 0,
@@ -688,6 +690,7 @@ function spawnFfmpeg(channel, codec, profile) {
     metrics.sessionsExited += 1;
     metrics.sessionsStoppedError += 1;
     if (sessions.get(key) === session) sessions.delete(key);
+    failedSessions.set(key, { error: stderrTail, expires: Date.now() + FAILED_SESSION_TTL_MS });
     if (isProcessAlive(session.webvttProcess)) {
       session.webvttProcess.kill('SIGTERM');
     }
@@ -700,6 +703,14 @@ function spawnFfmpeg(channel, codec, profile) {
     if (session.stopReason === 'startup_error') metrics.sessionsStoppedError += 1;
     session.exited = true;
     sessions.delete(key);
+    // Remember unintentional exits briefly so /ready can report the failure
+    // instead of an empty "not ready" after the session is gone.
+    if (!session.stopReason || session.stopReason === 'startup_error') {
+      failedSessions.set(key, {
+        error: stderrTail || 'ffmpeg exited before producing output',
+        expires: Date.now() + FAILED_SESSION_TTL_MS,
+      });
+    }
     console.info(
       `[stream] session exited channel=${channel} codec=${codec} profile=${normalizedProfile} reason=${session.stopReason || 'process_exit'}`
     );
@@ -825,6 +836,7 @@ function getOrCreateSession(channel, codec, profile) {
   const key = sessionKey(channel, codec, normalizedProfile);
   let session = sessions.get(key);
   if (!session) {
+    failedSessions.delete(key);
     session = spawnFfmpeg(channel, codec, normalizedProfile);
     sessions.set(key, session);
   }
@@ -842,8 +854,16 @@ function start(channel, codec, profile) {
 }
 
 function isReady(channel, codec, profile) {
-  const session = sessions.get(sessionKey(channel, codec, profile));
-  if (!session) return { ready: false, failed: false };
+  const key = sessionKey(channel, codec, profile);
+  const session = sessions.get(key);
+  if (!session) {
+    const failure = failedSessions.get(key);
+    if (failure && failure.expires > Date.now()) {
+      return { ready: false, failed: true, error: failure.error };
+    }
+    failedSessions.delete(key);
+    return { ready: false, failed: false };
+  }
   if (session.exited) return { ready: false, failed: true, error: session.stderrTail() };
   return { ready: fs.existsSync(session.playlist), failed: false };
 }
