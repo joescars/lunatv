@@ -1,11 +1,27 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const { pipeline } = require('stream');
 
 const record = require('../hdhomerunRecord');
 const recordingStream = require('../recordingStream');
 
 const router = express.Router();
+
+// Stream a file, tolerating it vanishing between check and open (ffmpeg
+// delete_segments / session teardown). Never leaves an unhandled 'error'.
+function sendFile(res, filePath, headers) {
+  fs.open(filePath, 'r', (openErr, fd) => {
+    if (openErr) {
+      if (res.headersSent) return res.destroy();
+      return res.status(openErr.code === 'ENOENT' ? 404 : 500).end();
+    }
+    for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
+    pipeline(fs.createReadStream(null, { fd, autoClose: true }), res, () => {
+      // Errors after headers are sent: pipeline already destroyed res.
+    });
+  });
+}
 const ID_RE = /^[a-f0-9]+$/i;
 const FILE_RE = /^(stream\.m3u8|segment[0-9]+\.ts)$/;
 
@@ -119,9 +135,10 @@ router.get('/recordings/:id/:profile/:file', (req, res) => {
   if (!session) return res.status(404).end();
   const filePath = path.join(session.dir, file);
   if (!fs.existsSync(filePath)) return res.status(404).end();
-  res.set('Cache-Control', 'no-cache');
-  res.type(file.endsWith('.m3u8') ? 'application/vnd.apple.mpegurl' : 'video/mp2t');
-  fs.createReadStream(filePath).pipe(res);
+  sendFile(res, filePath, {
+    'Cache-Control': 'no-cache',
+    'Content-Type': file.endsWith('.m3u8') ? 'application/vnd.apple.mpegurl' : 'video/mp2t',
+  });
 });
 
 module.exports = router;
