@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const { pipeline } = require('stream');
 
 const stream = require('../stream');
 const hdhr = require('../hdhomerun');
@@ -9,6 +10,20 @@ const record = require('../hdhomerunRecord');
 
 const router = express.Router();
 
+// Stream a file, tolerating it vanishing between check and open (ffmpeg
+// delete_segments / session teardown). Never leaves an unhandled 'error'.
+function sendFile(res, filePath, headers) {
+  fs.open(filePath, 'r', (openErr, fd) => {
+    if (openErr) {
+      if (res.headersSent) return res.destroy();
+      return res.status(openErr.code === 'ENOENT' ? 404 : 500).end();
+    }
+    for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
+    pipeline(fs.createReadStream(null, { fd, autoClose: true }), res, () => {
+      // Errors after headers are sent: pipeline already destroyed res.
+    });
+  });
+}
 const CHANNEL_RE = /^[0-9]+(\.[0-9]+)?$/;
 const CODEC_RE = /^(h264|hevc|direct)$/;
 const FILE_RE = /^(stream\.m3u8|segment[0-9]+\.ts|captions\.vtt)$/;
@@ -137,14 +152,12 @@ async function streamFile(req, res) {
     const filePath = path.join(session.dir, parsed.file);
     if (!fs.existsSync(filePath)) return res.status(404).end();
 
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader(
-      'Content-Type',
-      parsed.file.endsWith('.m3u8')
+    sendFile(res, filePath, {
+      'Cache-Control': 'no-cache',
+      'Content-Type': parsed.file.endsWith('.m3u8')
         ? 'application/vnd.apple.mpegurl'
-        : (parsed.file.endsWith('.vtt') ? 'text/vtt; charset=utf-8' : 'video/mp2t')
-    );
-    fs.createReadStream(filePath).pipe(res);
+        : (parsed.file.endsWith('.vtt') ? 'text/vtt; charset=utf-8' : 'video/mp2t'),
+    });
   } catch (err) {
     res.status(502).send(err.message);
   }
