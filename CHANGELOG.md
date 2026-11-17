@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-11-17
+
+### Fixed: bug review (#15)
+
+- The server no longer crashes when ffmpeg cannot be started (missing binary,
+  resource limits). Live, caption-sidecar and recording transcodes all handle
+  spawn errors (#10).
+- Live `/stream/.../ready` now returns `failed: true` with the ffmpeg error when
+  the transcoder exits or fails to spawn, so the browser and Roku stop polling
+  and show the real error instead of waiting for a timeout (#12).
+- Recording playback removes its temporary HLS directory when ffmpeg exits,
+  and a new `POST /recordings/<id>/<profile>/stop` route lets the browser player
+  release the session on `pagehide` (#14).
+- Roku: Record-current and favorite toggles from the player no longer crash the
+  channel on an undefined `showChannelNoticeStatus` (#11).
+- Roku: pressing Back while a recording is loading cancels its start task, and
+  a failed start without an error message no longer crashes (#13).
+
 ## 2026-09-01
 
 ### Added: Roku DVR browsing, playback, scheduling, and active recording control
