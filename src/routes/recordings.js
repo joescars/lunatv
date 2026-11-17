@@ -106,9 +106,14 @@ router.get('/recordings/:id/watch', async (req, res) => {
   }
 });
 
-router.post('/recordings/:id/:profile/start', (req, res) => {
+router.post('/recordings/:id/:profile/start', async (req, res) => {
   const { id, profile } = req.params;
   if (!ID_RE.test(id) || !recordingStream.PROFILES[profile]) return res.status(400).send('Invalid request');
+  try {
+    if (!(await record.getRecording(id))) return res.status(404).send('Recording not found');
+  } catch (err) {
+    return res.status(502).send(err.message);
+  }
   const sourceUrl = record.getPlaybackUrl(id);
   if (!sourceUrl) return res.status(404).send('Recording not found');
   recordingStream.start(id, sourceUrl, profile);

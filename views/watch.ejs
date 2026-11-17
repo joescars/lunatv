@@ -334,7 +334,12 @@
     bindCaptionTrackListeners();
     refreshCaptionsStatus();
     fetch(streamBase + 'start', { method: 'POST' })
-      .then(function () { pollUntilReady(Date.now(), 0); })
+      .then(function (res) {
+        if (res.ok) { pollUntilReady(Date.now(), 0); return; }
+        return res.json().catch(function () { return {}; }).then(function (body) {
+          setStatus(body.error || 'Stream failed to start (HTTP ' + res.status + ').');
+        });
+      })
       .catch(function () { setStatus('Could not reach the server to start the stream.'); });
   })();
 </script>

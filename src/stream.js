@@ -384,7 +384,26 @@ function getDecodeConfig() {
 
 const sessions = new Map();
 const failedSessions = new Map();
-const FAILED_SESSION_TTL_MS = 30000;
+const FAILED_SESSION_TTL_MS = Number(process.env.FAILED_SESSION_TTL_MS) || 30000;
+
+class SessionLimitError extends Error {
+  constructor(limit) {
+    super(`Too many active streams (limit ${limit}). Stop another stream and try again.`);
+    this.name = 'SessionLimitError';
+    this.limit = limit;
+  }
+}
+
+function sweepFailedSessions(now = Date.now()) {
+  let removed = 0;
+  for (const [key, failure] of failedSessions) {
+    if (failure.expires <= now) {
+      failedSessions.delete(key);
+      removed += 1;
+    }
+  }
+  return removed;
+}
 const metrics = {
   sessionsStarted: 0,
   sessionsExited: 0,
@@ -849,7 +868,13 @@ function getOrCreateSession(channel, codec, profile) {
 // isReady() rather than holding one long HTTP request (tuning can take
 // anywhere from ~5s to ~40s and browsers/hls.js time out long single
 // requests well before that).
-function start(channel, codec, profile) {
+function start(channel, codec, profile, maxSessions) {
+  // Joining an existing session is a reuse, not a new ffmpeg process, so it is
+  // never counted against the cap.
+  const key = sessionKey(channel, codec, normalizeProfile(profile));
+  if (!sessions.has(key) && Number.isFinite(maxSessions) && sessions.size >= maxSessions) {
+    throw new SessionLimitError(maxSessions);
+  }
   getOrCreateSession(channel, codec, profile);
 }
 
@@ -1027,9 +1052,13 @@ setInterval(() => {
       stopSession(session.channel, session.codec, session.profile, 'idle_timeout');
     }
   }
+  sweepFailedSessions(now);
 }, 5_000).unref();
 
 module.exports = {
+  SessionLimitError,
+  sweepFailedSessions,
+  _failedSessions: failedSessions,
   ensureSession,
   attachSession,
   start,
