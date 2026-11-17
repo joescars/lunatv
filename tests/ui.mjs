@@ -174,6 +174,28 @@ try {
     await scenario('normal');
     await page.unroute(origin + '/guide/fragment');
   });
+  await check('Guide error responses are not cached (Try again re-requests)', async () => {
+    // Fresh context = empty HTTP cache, so earlier guide loads can't mask the error response.
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await page.goto(origin + '/admin/status');
+    const browserFetch = url => page.evaluate(async u => { const r = await fetch(u); return { status: r.status, cc: r.headers.get('cache-control'), body: await r.text() }; }, url);
+    await scenario('error');
+    for (const url of ['/guide/fragment', '/guide/grid', '/api/guide', '/api/guide?slim=1']) {
+      const res = await browserFetch(url);
+      assert.equal(res.cc, 'no-store', `${url} error Cache-Control was ${res.cc}`);
+    }
+    await scenario('normal');
+    for (const url of ['/guide/fragment', '/guide/grid']) {
+      const res = await browserFetch(url);
+      assert.equal(res.status, 200);
+      assert.ok(!res.body.includes("couldn’t load"), `${url} still served the cached error after recovery`);
+    }
+    const ok = await browserFetch('/api/guide');
+    assert.equal(ok.status, 200);
+    assert.match(ok.cc, /max-age=15/);
+    await ctx.close();
+  });
   await check('Optional DVR remains optional', async () => {
     await scenario('dvr-off');
     await page.goto(origin + '/recordings');

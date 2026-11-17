@@ -4,6 +4,7 @@ const hdhr = require('../hdhomerun');
 const cache = require('../cache');
 
 const router = express.Router();
+const GUIDE_CACHE_CONTROL = 'private, max-age=30, stale-while-revalidate=30';
 const GUIDE_TTL_MS = Number(process.env.GUIDE_CACHE_TTL_MS || 30000);
 
 // The mobile guide is the app's primary landing experience - "/" and
@@ -17,7 +18,6 @@ router.get('/', renderGuideHome);
 router.get('/guide', renderGuideHome);
 
 router.get('/guide/fragment', async (req, res) => {
-  res.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=30');
   const now = Math.floor(Date.now() / 1000);
   try {
     const cacheKey = 'guide:duration:6';
@@ -28,14 +28,15 @@ router.get('/guide/fragment', async (req, res) => {
     }
     const lineup = await hdhr.getLineup().catch(() => []);
     const channels = guide.mergeFavorites(guideChannels, lineup);
+    res.set('Cache-Control', GUIDE_CACHE_CONTROL);
     res.render('_guide_accordion', { channels, error: null, now });
   } catch (err) {
+    res.set('Cache-Control', 'no-store');
     res.render('_guide_accordion', { channels: [], error: err.message, now });
   }
 });
 
 router.get('/guide/grid', async (req, res) => {
-  res.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=30');
   const now = Math.floor(Date.now() / 1000);
   try {
     const cacheKey = 'guide:duration:8';
@@ -46,8 +47,10 @@ router.get('/guide/grid', async (req, res) => {
     }
     const lineup = await hdhr.getLineup().catch(() => []);
     const channels = guide.mergeFavorites(guideChannels, lineup);
+    res.set('Cache-Control', GUIDE_CACHE_CONTROL);
     res.render('guide-grid', { channels, error: null, now });
   } catch (err) {
+    res.set('Cache-Control', 'no-store');
     res.render('guide-grid', { channels: [], error: err.message, now });
   }
 });

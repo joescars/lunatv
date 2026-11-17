@@ -57,14 +57,16 @@ router.post('/api/channels/:guideNumber/favorite', async (req, res) => {
 });
 
 router.get('/api/guide', async (req, res) => {
-  res.set('Cache-Control', 'private, max-age=15, stale-while-revalidate=30');
   const slim = req.query.slim === '1';
   const serverTime = Math.floor(Date.now() / 1000);
   const slotStart = serverTime - (serverTime % 1800);
   const slimCacheKey = `guide:roku:duration:4:${slotStart}`;
   if (slim) {
     const cachedSlim = cache.get(slimCacheKey);
-    if (cachedSlim) return res.json(cachedSlim);
+    if (cachedSlim) {
+      res.set('Cache-Control', 'private, max-age=15, stale-while-revalidate=30');
+      return res.json(cachedSlim);
+    }
   }
 
   let guideChannels;
@@ -76,6 +78,7 @@ router.get('/api/guide', async (req, res) => {
       cache.set(cacheKey, guideChannels, GUIDE_TTL_MS);
     }
   } catch (err) {
+    res.set('Cache-Control', 'no-store');
     res.status(502).json({ error: err.message });
     return;
   }
@@ -115,6 +118,7 @@ router.get('/api/guide', async (req, res) => {
 
   const payload = { serverTime, channels };
   if (slim) cache.set(slimCacheKey, payload, GUIDE_TTL_MS);
+  res.set('Cache-Control', 'private, max-age=15, stale-while-revalidate=30');
   res.json(payload);
 });
 
