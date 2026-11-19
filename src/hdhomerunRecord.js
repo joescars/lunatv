@@ -7,6 +7,12 @@ const hdhr = require('./hdhomerun');
 const RECORD_HOST = process.env.RECORD_ENGINE_HOST || '';
 const RECORD_PORT = process.env.RECORD_ENGINE_PORT || 37899;
 const RECORD_BASE = RECORD_HOST ? `http://${RECORD_HOST}:${RECORD_PORT}` : null;
+// URL#origin drops default ports, so a base with an explicit ":80" never
+// equals a parsed origin; compare against the normalized form instead.
+const RECORD_ORIGIN = (() => {
+  if (!RECORD_BASE) return null;
+  try { return new URL(RECORD_BASE).origin; } catch (err) { return null; }
+})();
 const API_BASE = 'https://api.hdhomerun.com';
 const TIMEOUT_MS = 8000;
 
@@ -37,6 +43,12 @@ async function fetchWithTimeout(url, options = {}) {
 async function recordCurrentAiring({ seriesId, channel, startTime }) {
   if (!isConfigured()) {
     throw new Error('RECORD_ENGINE_HOST is not configured');
+  }
+  // Without a series id the rule API would receive the literal "undefined".
+  if (!seriesId) {
+    const err = new Error('This program has no series ID, so it cannot be recorded');
+    err.status = 422;
+    throw err;
   }
 
   const device = await hdhr.getDeviceInfo();
@@ -150,7 +162,7 @@ function getPlaybackUrl(id) {
 async function deleteRecording(recording) {
   if (!recording || !recording.id || !recording.CmdURL || !isConfigured()) throw new Error('Recording not found');
   const url = new URL(recording.CmdURL);
-  if (url.origin !== RECORD_BASE) throw new Error('Recording command URL is invalid');
+  if (!RECORD_ORIGIN || url.origin !== RECORD_ORIGIN) throw new Error('Recording command URL is invalid');
   url.searchParams.set('cmd', 'delete');
   const { res } = await fetchWithTimeout(url, { method: 'POST' });
   if (!res.ok) throw new Error(`Delete recording request failed: ${res.status} ${res.statusText}`);
