@@ -140,6 +140,32 @@ try {
     await row.locator('button').first().click();
     await page.waitForFunction(() => document.querySelector('#channel-3-1 button').getAttribute('aria-pressed') === 'true');
   });
+  await check('Channel filters are re-applied after Hide/Unfavorite row swaps', async () => {
+    await goto('/admin/channels');
+    const count = () => page.locator('#channel-count').textContent();
+    const visibleRows = () => page.locator('.channel-row:visible').count();
+    // Hide with Show Hidden off: the row must disappear and the count must follow.
+    const before = await visibleRows();
+    await page.locator('#channel-4-1 button[title="Hide"]').click();
+    await page.locator('#channel-4-1').waitFor({ state: 'hidden' });
+    assert.equal(await visibleRows(), before - 1);
+    assert.equal(await count(), `${before - 1} channels`);
+    // Unfavorite under the Favorites filter: the row must leave the filtered list.
+    await page.locator('label[for="filter-favorites"]').click();
+    const favorites = await visibleRows();
+    assert.ok(favorites >= 2, 'fixture should have favorites');
+    await page.locator('#channel-2-1 button[title="Unfavorite"]').click();
+    await page.locator('#channel-2-1').waitFor({ state: 'hidden' });
+    assert.equal(await visibleRows(), favorites - 1);
+    assert.equal(await count(), `${favorites - 1} channel${favorites - 1 === 1 ? '' : 's'}`);
+    // Restore shared fixture state: unhide the row and re-favorite the first channel.
+    await page.locator('label[for="filter-favorites"]').click();
+    await page.locator('label[for="filter-hidden"]').click();
+    await page.locator('#channel-4-1 button[title="Unhide"]').click();
+    await page.waitForFunction(() => document.querySelector('#channel-4-1 button[title="Hide"]'));
+    await page.locator('#channel-2-1 button[title="Favorite"]').click();
+    await page.waitForFunction(() => document.querySelector('#channel-2-1 button[title="Unfavorite"]'));
+  });
   await check('Scan source, start, progress and abort', async () => {
     await goto('/admin/scan');
     await page.selectOption('#scan-source', 'Cable');

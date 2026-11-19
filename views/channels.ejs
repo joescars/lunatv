@@ -59,7 +59,12 @@
       applyFilters();
       favCheck.focus();
     });
-    list.addEventListener('htmx:afterSwap', applyFilters);
+    // Row/load-more swaps use outerHTML, so htmx:afterSwap fires on the detached
+    // old element and never reaches #channel-list. Listen on body for afterSettle
+    // (fired on the inserted content) and re-apply the active filters.
+    document.body.addEventListener('htmx:afterSettle', function (evt) {
+      if (list.isConnected && evt.target instanceof Node && list.contains(evt.target)) applyFilters();
+    });
     applyFilters();
   })();
 </script>
