@@ -8,6 +8,7 @@ const hdhr = require('../hdhomerun');
 const guide = require('../guide');
 const record = require('../hdhomerunRecord');
 const cache = require('../cache');
+const { sanitizeFfmpegError } = require('../ffmpegSupport');
 
 const router = express.Router();
 
@@ -262,7 +263,9 @@ async function streamStats(req, res) {
     const tunerStatus = await hdhr.getTunerStatus();
     tuner = (tunerStatus || []).find((entry) => String(entry.VctNumber || '') === parsed.channel) || null;
   } catch (err) {
-    signalError = err.message;
+    // Device errors name the tuner's IP/URL; log the detail, return a summary.
+    console.warn(`[stream] tuner status unavailable: ${err && err.message}`);
+    signalError = sanitizeFfmpegError(err && err.message, 'Tuner status unavailable.');
   }
 
   res.json({

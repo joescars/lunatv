@@ -215,6 +215,16 @@ function isProcessAlive(proc) {
   return true;
 }
 
+// Raw ffmpeg/fs error text carries tuner IPs, device paths and driver details.
+// Clients (/stats) only ever see a short sanitized message; the raw detail goes
+// to the server log, one line, truncated.
+function logRawDetail(label, session, raw) {
+  const oneLine = String(raw || '').replace(/\s+/g, ' ').trim();
+  if (oneLine) console.warn(`[stream] ${label} channel=${session.channel}: ${oneLine.slice(-1200)}`);
+}
+
+const logWebVttDetail = (session, what, raw) => logRawDetail(`webvtt sidecar ${what}`, session, raw);
+
 function startWebVttSidecar(session) {
   if (!session) return;
   if (isProcessAlive(session.webvttProcess)) return;
@@ -257,12 +267,13 @@ function startWebVttSidecar(session) {
   try {
     fs.writeFileSync(session.webvtt.path, 'WEBVTT\n\n');
   } catch (err) {
+    logWebVttDetail(session, 'open failed', err && err.message);
     session.webvtt = {
       ...session.webvtt,
       state: 'failed',
       reason: 'sidecar_open_failed',
       lastUpdateAt: Date.now(),
-      lastError: err && err.message ? err.message : 'Could not initialize sidecar output',
+      lastError: 'Could not initialize sidecar output.',
     };
     return;
   }
@@ -273,7 +284,7 @@ function startWebVttSidecar(session) {
     mode: WEBVTT_SIDECAR_MODE,
     lastUpdateAt: Date.now(),
     lastError: null,
-    stderrTail: null,
+    stderrLines: 0,
   };
   session.webvttProcess = proc;
 
@@ -290,12 +301,13 @@ function startWebVttSidecar(session) {
       try {
         fs.appendFileSync(session.webvtt.path, text);
       } catch (err) {
+        logWebVttDetail(session, 'write failed', err && err.message);
         session.webvtt = {
           ...session.webvtt,
           state: 'failed',
           reason: 'sidecar_write_failed',
           lastUpdateAt: Date.now(),
-          lastError: err && err.message ? err.message : 'Could not write sidecar output',
+          lastError: 'Could not write sidecar output.',
         };
         return;
       }
@@ -313,22 +325,24 @@ function startWebVttSidecar(session) {
   proc.stderr.on('data', (chunk) => {
     const text = chunk.toString();
     stderrTail = (stderrTail + text).slice(-2000);
+    // Raw stderr stays in this closure (and the server log on exit); /stats
+    // only gets a line count so a noisy sidecar is still visible.
     session.webvtt = {
       ...session.webvtt,
       lastUpdateAt: Date.now(),
-      stderrTail,
+      stderrLines: stderrTail.split(/\r?\n/).filter((line) => line.trim()).length,
     };
   });
 
   proc.on('error', (err) => {
     const message = err && err.message ? err.message : 'ffmpeg sidecar failed to spawn';
-    console.warn(`[stream] webvtt sidecar error channel=${session.channel}: ${message}`);
+    logWebVttDetail(session, 'error', message);
     session.webvtt = {
       ...session.webvtt,
       state: 'failed',
       reason: 'spawn_error',
       lastUpdateAt: Date.now(),
-      lastError: message,
+      lastError: sanitizeFfmpegError(message, 'ffmpeg sidecar failed to start.'),
     };
   });
 
@@ -339,13 +353,15 @@ function startWebVttSidecar(session) {
       reason = 'no_subtitle_stream';
     }
 
+    if (failed) logWebVttDetail(session, `exited code=${code}`, stderrTail);
     session.webvtt = {
       ...session.webvtt,
       state: failed ? 'failed' : 'ended',
       reason,
       lastUpdateAt: Date.now(),
-      lastError: failed ? (stderrTail || `ffmpeg exited with code ${code}`) : null,
-      stderrTail: stderrTail || null,
+      lastError: failed
+        ? sanitizeFfmpegError(stderrTail, `ffmpeg sidecar exited with code ${code}.`)
+        : null,
     };
   });
 }
@@ -389,9 +405,13 @@ function getDecodeConfig() {
     };
   }
 
+  // Full hardware decode. No forced -c:v: with -hwaccel qsv ffmpeg picks the
+  // matching *_qsv decoder (mpeg2_qsv, h264_qsv, hevc_qsv, ...) for whatever
+  // the channel carries. Forcing mpeg2_qsv made every non-MPEG-2 channel fail
+  // with "Decode error rate 1 exceeds maximum".
   return {
-    decoder: 'mpeg2_qsv',
-    inputArgs: ['-hwaccel', 'qsv', '-hwaccel_output_format', 'qsv', '-c:v', 'mpeg2_qsv'],
+    decoder: 'auto_qsv',
+    inputArgs: ['-hwaccel', 'qsv', '-hwaccel_output_format', 'qsv'],
     preEncodeArgs: [],
   };
 }
@@ -611,7 +631,7 @@ function spawnFfmpeg(channel, codec, profile) {
       reason: null,
       lastUpdateAt: null,
       lastError: null,
-      stderrTail: null,
+      stderrLines: 0,
     },
     webvttProcess: null,
     sourceCaptions: {
@@ -641,12 +661,13 @@ function spawnFfmpeg(channel, codec, profile) {
       lastError: null,
     };
   } catch (err) {
+    logWebVttDetail(session, 'placeholder write failed', err && err.message);
     session.webvtt = {
       ...session.webvtt,
       state: 'failed',
       reason: 'placeholder_write_failed',
       lastUpdateAt: Date.now(),
-      lastError: err && err.message ? err.message : 'Failed to create placeholder VTT',
+      lastError: 'Failed to create placeholder VTT.',
     };
   }
 
@@ -817,16 +838,20 @@ async function maybeProbeCaptionTarget(session, resultField, promiseField, input
         };
       }
     } catch (err) {
+      // execFile errors embed the whole ffprobe command line (tuner URL/IP) and
+      // stderr; log that, expose only a sanitized summary via /stats.
+      const raw = [err && err.message, err && err.stderr].filter(Boolean).join(' ');
+      logRawDetail(`${resultField} probe failed`, session, raw);
       session[resultField] = {
         ...session[resultField],
         lastProbeAt: Date.now(),
-        lastProbeError: err && err.message ? err.message : 'Caption probe failed',
+        lastProbeError: sanitizeFfmpegError(raw, 'Caption probe failed.'),
       };
       if (resultField === 'captions' && session.mediaInfo) {
         session.mediaInfo = {
           ...session.mediaInfo,
           lastProbeAt: Date.now(),
-          lastProbeError: err && err.message ? err.message : 'Media probe failed',
+          lastProbeError: sanitizeFfmpegError(raw, 'Media probe failed.'),
         };
       }
     } finally {
@@ -1095,6 +1120,8 @@ function computeMeasuredBitrate(session) {
 function getSessionInfo(channel, codec, profile) {
   const session = sessions.get(sessionKey(channel, codec, profile));
   if (!session) return null;
+  // The on-disk VTT path is a server filesystem detail; keep it internal.
+  const { path: _internalPath, ...webvttPublic } = session.webvtt;
   return {
     channel: session.channel,
     codec: session.codec,
@@ -1123,7 +1150,7 @@ function getSessionInfo(channel, codec, profile) {
       measured: computeMeasuredBitrate(session),
     },
     webvtt: {
-      ...session.webvtt,
+      ...webvttPublic,
       active: isProcessAlive(session.webvttProcess),
     },
   };

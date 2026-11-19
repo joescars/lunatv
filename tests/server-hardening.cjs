@@ -296,7 +296,7 @@ test('software decode: no forced mpeg2 decoder; encoder (h264 for browsers, hevc
   assert.ok(outputArgs(h264).includes('-a53cc'));
 });
 
-test('direct mode (Roku) and qsv decode mode are untouched by the software-decode change', () => {
+test('direct mode (Roku) is untouched; qsv decode mode keeps hwaccel but no longer forces mpeg2_qsv', () => {
   const stream = freshRequire('stream.js', { STREAM_DECODE_MODE: 'sw' });
   stream.start('12.1', 'direct', 'medium', 20);
   const direct = spawned[spawned.length - 1];
@@ -308,7 +308,7 @@ test('direct mode (Roku) and qsv decode mode are untouched by the software-decod
   const proc = spawned[spawned.length - 1];
   assert.deepEqual(
     inputArgs(proc).slice(inputArgs(proc).indexOf('-hwaccel')),
-    ['-hwaccel', 'qsv', '-hwaccel_output_format', 'qsv', '-c:v', 'mpeg2_qsv'],
+    ['-hwaccel', 'qsv', '-hwaccel_output_format', 'qsv'],
   );
 });
 
@@ -415,4 +415,133 @@ test('recordingStream: isReady sanitizes stderr and SIGKILL fallback applies on 
   assert.deepEqual(stubborn.signals, ['SIGTERM']);
   await sleep(150);
   assert.deepEqual(stubborn.signals, ['SIGTERM', 'SIGKILL']);
+});
+
+// ------------------------------------------- qsv decode: no forced mpeg2
+test('STREAM_DECODE_MODE=qsv: hwaccel stays on, decoder is auto-selected for h264/hevc encodes', () => {
+  const stream = freshRequire('stream.js', { STREAM_DECODE_MODE: 'qsv' });
+  for (const [channel, codec, encoder] of [['21.1', 'h264', 'h264_qsv'], ['21.2', 'hevc', 'hevc_qsv']]) {
+    stream.start(channel, codec, 'medium', 20);
+    const proc = spawned[spawned.length - 1];
+    const before = inputArgs(proc);
+    assert.ok(!before.includes('-c:v'), `no forced input decoder: ${before.join(' ')}`);
+    assert.ok(!proc.args.some((a) => /mpeg2/.test(a)), proc.args.join(' '));
+    assert.deepEqual(before.slice(before.indexOf('-hwaccel')), ['-hwaccel', 'qsv', '-hwaccel_output_format', 'qsv']);
+    const after = outputArgs(proc);
+    assert.equal(after[after.indexOf('-c:v') + 1], encoder);
+    assert.ok(!after.join(' ').includes('hwupload'), 'frames are already on the GPU in qsv decode mode');
+    const info = stream.getSessionInfo(channel, codec, 'medium');
+    assert.equal(info.ffmpeg.decodeMode, 'qsv');
+  }
+});
+
+// -------------------------------------- WebVTT sidecar diagnostics (/stats)
+test('/stats WebVTT sidecar diagnostics never expose raw stderr, IPs, or paths; detail is logged', async () => {
+  const stream = freshRequire('stream.js', { WEBVTT_SIDECAR_MODE: 'on' });
+  const logs = [];
+  const origWarn = console.warn;
+  console.warn = (...a) => logs.push(a.join(' '));
+  try {
+    stream.start('31.1', 'h264', 'medium', 20);
+    const main = spawned[spawned.length - 1];
+    fs.writeFileSync(path.join(stream.channelDir('31.1', 'h264', 'medium'), 'stream.m3u8'), '#EXTM3U\n');
+    await stream.attachSession('31.1', 'h264', 'medium');
+    const sidecar = spawned[spawned.length - 1];
+    assert.notEqual(sidecar, main, 'sidecar ffmpeg was spawned');
+    assert.ok(sidecar.args.join(' ').includes('webvtt'));
+
+    sidecar.stderr.emit('data', Buffer.from(
+      'driver /dev/dri/renderD128 failed\n'
+      + 'Error opening input: Server returned 503 http://10.1.2.3:5004/auto/v31.1\n',
+    ));
+    const running = stream.getSessionInfo('31.1', 'h264', 'medium').webvtt;
+    assert.equal(running.stderrTail, undefined);
+    assert.equal(running.stderrLines, 2, 'activity is still visible as a line count');
+
+    sidecar.finish(1);
+    const info = stream.getSessionInfo('31.1', 'h264', 'medium');
+    const dump = JSON.stringify(info.webvtt);
+    assert.equal(info.webvtt.state, 'failed');
+    assert.equal(info.webvtt.reason, 'ffmpeg_exit', 'machine-readable reason is kept');
+    assert.match(info.webvtt.lastError, /busy/i, 'sanitized summary keeps the useful cause');
+    assert.ok(!/10\.1\.2\.3|5004|dev\/dri|hdhomerun-web-streams|stderrTail/.test(dump), dump);
+    assert.ok(logs.some((l) => /webvtt sidecar exited code=1/.test(l) && /10\.1\.2\.3/.test(l)), 'raw detail is logged server-side');
+
+    // Spawn failures too.
+    stream.start('31.2', 'h264', 'medium', 20);
+    fs.writeFileSync(path.join(stream.channelDir('31.2', 'h264', 'medium'), 'stream.m3u8'), '#EXTM3U\n');
+    await stream.attachSession('31.2', 'h264', 'medium');
+    spawned[spawned.length - 1].emit('error', new Error("spawn /usr/lib/jellyfin-ffmpeg/ffmpeg ENOENT http://10.1.2.3:5004"));
+    const spawnFail = stream.getSessionInfo('31.2', 'h264', 'medium').webvtt;
+    assert.equal(spawnFail.reason, 'spawn_error');
+    assert.ok(!/10\.1\.2\.3|jellyfin-ffmpeg|5004/.test(spawnFail.lastError), spawnFail.lastError);
+  } finally { console.warn = origWarn; }
+});
+
+test('/stream/.../stats response omits the VTT file path and sanitizes tuner errors', async () => {
+  const stream = freshRequire('stream.js');
+  const hdhr = require(src('hdhomerun.js'));
+  hdhr.getTunerStatus = async () => { throw new Error('connect ECONNREFUSED 10.1.2.3:80'); };
+  stream.getSessionInfoWithCaptions = async (...a) => stream.getSessionInfo(...a);
+  delete require.cache[require.resolve(src('routes/watch.js'))];
+  stream.start('32.1', 'h264', 'medium', 20);
+  const app = express();
+  app.use(require(src('routes/watch.js')));
+  const server = await listen(app);
+  const origWarn = console.warn;
+  console.warn = () => {};
+  try {
+    const res = await request(server, 'GET', '/stream/32.1/h264/medium/stats');
+    assert.equal(res.status, 200);
+    const body = JSON.parse(res.body);
+    assert.ok(!/10\.1\.2\.3|hdhomerun-web-streams|stderrTail/.test(res.body), res.body);
+    assert.equal(body.session.webvtt.path, undefined);
+    assert.equal(typeof body.session.webvtt.state, 'string');
+    assert.match(body.signalError, /reach the HDHomeRun/);
+  } finally { console.warn = origWarn; server.close(); }
+});
+
+// ------------------------------------------------ Docker: non-root + health
+test('Dockerfile: amd64 Jellyfin ffmpeg7 kept; HEALTHCHECK and non-root entrypoint present', () => {
+  const dockerfile = fs.readFileSync(path.join(__dirname, '..', 'Dockerfile'), 'utf8');
+  assert.match(dockerfile, /Architectures: amd64/);
+  assert.match(dockerfile, /jellyfin-ffmpeg7/);
+  assert.match(dockerfile, /^HEALTHCHECK .*\\\n\s+CMD \["node", "-e", ".*\/stream\/metrics/m);
+  assert.match(dockerfile, /^ENTRYPOINT \["\/app\/docker-entrypoint\.sh"\]$/m);
+  assert.match(dockerfile, /^CMD \["node", "server\.js"\]$/m);
+  const mode = fs.statSync(path.join(__dirname, '..', 'docker-entrypoint.sh')).mode;
+  assert.ok(mode & 0o100, 'entrypoint is executable in the repo');
+});
+
+test('docker-entrypoint.sh: drops root to node with the GPU node group IDs (stubbed id/stat/setpriv)', () => {
+  const bin = fs.mkdtempSync(path.join(process.env.TMPDIR, 'entry-'));
+  const dri = path.join(bin, 'dri');
+  fs.mkdirSync(dri);
+  for (const n of ['renderD128', 'card1', 'card0']) fs.writeFileSync(path.join(dri, n), '');
+  const stub = (name, body) => { fs.writeFileSync(path.join(bin, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 }); };
+  stub('id', 'echo ${FAKE_UID:-0}');
+  stub('stat', 'case "$3" in */renderD128) echo 992;; */card1) echo 44;; */card0) echo ${CARD0_GID:-44};; esac');
+  stub('setpriv', 'echo "setpriv $*"');
+  const script = fs.readFileSync(path.join(__dirname, '..', 'docker-entrypoint.sh'), 'utf8')
+    .replace(/\/dev\/dri\//g, `${dri}/`);
+  const runner = path.join(bin, 'entry.sh');
+  fs.writeFileSync(runner, script, { mode: 0o755 });
+  const run = (env = {}, args = ['node', 'server.js']) => childProcess.spawnSync('/bin/sh', [runner, ...args], {
+    env: { PATH: `${bin}:/usr/bin:/bin`, ...env }, encoding: 'utf8',
+  });
+
+  let out = run();
+  assert.equal(out.status, 0, out.stderr);
+  assert.equal(out.stdout.trim(), 'setpriv --reuid=node --regid=node --groups 992,44 -- node server.js', 'GIDs de-duplicated');
+
+  out = run({ CARD0_GID: '0' });
+  assert.match(out.stdout, /--groups 992,44 /, 'root-owned nodes never grant the root group');
+
+  out = run({ FAKE_UID: '1000' });
+  assert.equal(out.stdout.trim(), '', 'already non-root: run directly, no setpriv');
+  fs.rmSync(path.join(dri), { recursive: true });
+  fs.mkdirSync(dri);
+  out = run();
+  assert.match(out.stdout, /--clear-groups -- node server\.js/);
+  assert.match(out.stderr, /no group-accessible \/dev\/dri/);
 });
