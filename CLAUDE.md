@@ -13,7 +13,8 @@ A mobile-responsive web UI for an HDHomeRun network tuner — a friendlier alter
 ```bash
 npm install              # install dependencies
 npm start                # run locally (node server.js)
-docker compose up -d --build   # build and run the container
+docker compose up -d           # run the published image (pull only)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build   # build and run local code
 ```
 
 There is no test suite, lint config, or build step in this repo.

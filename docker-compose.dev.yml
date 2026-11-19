@@ -1,0 +1,14 @@
+# Local-development override: build the image from this checkout instead of
+# pulling the published one. Use together with the base file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+#
+# The Dockerfile targets linux/amd64 (Jellyfin ffmpeg7); on ARM hosts run the
+# Node app directly (`npm start`) rather than building this image.
+services:
+  hdhomerun-web:
+    build: .
+    # Tag the local build separately so it never overwrites or masquerades as
+    # the published ghcr.io/joescars/lunatv:latest image.
+    image: lunatv:dev
+    pull_policy: build
