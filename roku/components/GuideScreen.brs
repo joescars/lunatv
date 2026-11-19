@@ -27,6 +27,7 @@ sub init()
     m.lastServerTime = invalid
     m.lastSlotStart = invalid
     m.previewTask = invalid
+    m.previewRequestSeq = 0
     m.previewChannelNumber = invalid
     m.livePreviewEnabled = true
 
@@ -537,10 +538,14 @@ sub startPreviewForFocusedChannel()
     stopPreview()
     m.previewChannelNumber = channelNumber
 
-    if m.previewTask = invalid
-        m.previewTask = CreateObject("roSGNode", "StreamStartTask")
-        m.previewTask.observeField("result", "onPreviewStreamResult")
-    end if
+    ' stopPreview() above already detached and cleared the previous task.
+    ' A fresh node per request keeps a late result from the previous
+    ' channel from being applied to this one.
+    m.previewRequestSeq = m.previewRequestSeq + 1
+    task = CreateObject("roSGNode", "StreamStartTask")
+    task.id = "previewStart" + m.previewRequestSeq.ToStr()
+    task.observeField("result", "onPreviewStreamResult")
+    m.previewTask = task
     m.previewTask.serverUrl = m.top.serverUrl
     m.previewTask.channelNumber = channelNumber
     ' Always h264 for the preview regardless of the user's main playback
@@ -557,6 +562,8 @@ end sub
 sub onPreviewStreamResult(event as object)
     result = event.getData()
     taskNode = event.getRoSGNode()
+    if m.previewTask = invalid or taskNode = invalid or taskNode.id <> m.previewTask.id then return
+    m.previewTask = invalid
     if result = invalid or result.state <> "ready" then return
 
     ' The focused row may have moved on again while this was in flight -
@@ -580,7 +587,11 @@ end sub
 sub stopPreview()
     m.previewDebounceTimer.control = "stop"
     if m.previewTask <> invalid
+        ' unobserveField first so a result already posted by the old task
+        ' can't reach onPreviewStreamResult after we've moved on.
+        m.previewTask.unobserveField("result")
         m.previewTask.control = "STOP"
+        m.previewTask = invalid
     end if
     if m.previewChannelNumber <> invalid and m.previewChannelNumber <> ""
         requestStreamStop(m.previewChannelNumber, "h264", "low")

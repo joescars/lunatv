@@ -49,6 +49,8 @@ sub init()
     m.tuningStarted = false
     m.statsVisible = false
     m.statsTask = invalid
+    m.statsRequestSeq = 0
+    m.streamRequestSeq = 0
     m.statsCodec = "hevc"
     m.statsProfile = "medium"
     m.channels = invalid
@@ -101,7 +103,13 @@ sub startTuning()
     refreshStatsContext()
     showOverlay("Connecting to Live TV", true)
 
+    ' One fresh task per tune request. Tasks are not reused so a late result
+    ' from an earlier channel can never be mistaken for this one; the id is
+    ' how onStreamStartResult recognises its own request.
+    cancelStreamTask()
+    m.streamRequestSeq = m.streamRequestSeq + 1
     task = CreateObject("roSGNode", "StreamStartTask")
+    task.id = "streamStart" + m.streamRequestSeq.ToStr()
     task.serverUrl = m.top.serverUrl
     task.channelNumber = m.top.channelNumber
     task.codec = normalizeCodec(m.top.codec)
@@ -169,10 +177,7 @@ sub changeChannelBy(delta as integer)
     m.top.nextTitle = ch.nextTitle
     m.recordingScheduled = false
 
-    if m.streamTask <> invalid
-        m.streamTask.control = "STOP"
-        m.streamTask = invalid
-    end if
+    cancelStreamTask()
     requestStreamStop(oldChannelNumber, oldCodec, oldProfile)
     if m.video <> invalid
         m.video.control = "stop"
@@ -182,7 +187,22 @@ sub changeChannelBy(delta as integer)
     startTuning()
 end sub
 
+' Detaches and stops the in-flight StreamStartTask, if any. unobserveField
+' must come first: STOP does not cancel a result the task already posted,
+' so without it the old channel's "ready" could still reach
+' onStreamStartResult and start playback of the wrong channel.
+sub cancelStreamTask()
+    if m.streamTask = invalid then return
+    m.streamTask.unobserveField("result")
+    m.streamTask.control = "STOP"
+    m.streamTask = invalid
+end sub
+
 sub onStreamStartResult(event as object)
+    ' Ignore anything that isn't the current request (defensive; covers a
+    ' result already queued when cancelStreamTask() ran).
+    sender = event.getRoSGNode()
+    if m.streamTask = invalid or sender = invalid or sender.id <> m.streamTask.id then return
     result = event.getData()
     m.streamTask = invalid
     if result = invalid then return
@@ -318,6 +338,7 @@ function formatProgramEndTime(startTime as dynamic, duration as dynamic) as stri
     if endTime <= 0 then return ""
     time = CreateObject("roDateTime")
     time.FromSeconds(endTime)
+    time.ToLocalTime()
     hour = time.GetHours()
     minute = time.GetMinutes()
     suffix = "AM"
@@ -540,20 +561,35 @@ sub onStatsTimerFire(event as object)
     end if
 end sub
 
+' m.statsTask is non-invalid exactly while a fetch is in flight. Do not
+' test task.control for this: it reads back the last value written ("RUN")
+' and never reverts when the task finishes, which blocked every refresh
+' after the first. Each fetch uses a fresh task, cleared in onStatsResult.
 sub requestStats()
-    if m.statsTask = invalid
-        m.statsTask = CreateObject("roSGNode", "StreamStatsTask")
-        m.statsTask.observeField("result", "onStatsResult")
-    end if
-    if m.statsTask.control = "RUN" then return
-    m.statsTask.serverUrl = m.top.serverUrl
-    m.statsTask.channelNumber = m.top.channelNumber
-    m.statsTask.codec = m.statsCodec
-    m.statsTask.profile = m.statsProfile
-    m.statsTask.control = "RUN"
+    if m.statsTask <> invalid then return
+    m.statsRequestSeq = m.statsRequestSeq + 1
+    task = CreateObject("roSGNode", "StreamStatsTask")
+    task.id = "streamStats" + m.statsRequestSeq.ToStr()
+    task.observeField("result", "onStatsResult")
+    task.serverUrl = m.top.serverUrl
+    task.channelNumber = m.top.channelNumber
+    task.codec = m.statsCodec
+    task.profile = m.statsProfile
+    m.statsTask = task
+    task.control = "RUN"
+end sub
+
+sub cancelStatsTask()
+    if m.statsTask = invalid then return
+    m.statsTask.unobserveField("result")
+    m.statsTask.control = "STOP"
+    m.statsTask = invalid
 end sub
 
 sub onStatsResult(event as object)
+    sender = event.getRoSGNode()
+    if m.statsTask = invalid or sender = invalid or sender.id <> m.statsTask.id then return
+    m.statsTask = invalid
     result = event.getData()
     if m.statsVisible <> true then return
 
@@ -699,6 +735,9 @@ sub hideStatsPanel()
     m.statsVisible = false
     m.statsPanel.visible = false
     m.statsTimer.control = "stop"
+    ' Drop any fetch for the previous channel/panel session so its late
+    ' result can't overwrite a newer "Loading diagnostics..." state.
+    cancelStatsTask()
 end sub
 
 sub toggleStatsPanel()
@@ -918,14 +957,8 @@ end sub
 sub closePlayer()
     hideChannelNotice()
     hideStatsPanel()
-    if m.statsTask <> invalid
-        m.statsTask.control = "STOP"
-        m.statsTask = invalid
-    end if
-    if m.streamTask <> invalid
-        m.streamTask.control = "STOP"
-        m.streamTask = invalid
-    end if
+    cancelStatsTask()
+    cancelStreamTask()
     requestStreamStop(m.top.channelNumber, normalizeCodec(m.top.codec), m.statsProfile)
     ' Explicitly halt playback on the way out even though the server also
     ' auto-releases the tuner ~20s after requests stop.
