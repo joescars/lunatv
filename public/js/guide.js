@@ -77,11 +77,26 @@
     return 'medium';
   }
 
+  // Per-viewer id sent with start/heartbeat/stop so one viewer leaving cannot
+  // stop a stream session that other viewers share. Handed to the watch page.
+  function newViewerId() {
+    var c = window.crypto;
+    if (c && typeof c.randomUUID === 'function') return c.randomUUID();
+    var bytes = new Uint8Array(16);
+    if (c && typeof c.getRandomValues === 'function') {
+      c.getRandomValues(bytes);
+    } else {
+      for (var i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+    }
+    return Array.prototype.map.call(bytes, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+  }
+
   window.watchChannel = function (channel) {
     var profile = chooseProfile();
     var encoded = encodeURIComponent(channel);
-    var destination = '/watch/' + encoded + '?quality=' + encodeURIComponent(profile) + '&embedded=1';
-    fetch('/stream/' + encoded + '/h264/' + encodeURIComponent(profile) + '/start', { method: 'POST' }).catch(function () {});
+    var viewer = encodeURIComponent(newViewerId());
+    var destination = '/watch/' + encoded + '?quality=' + encodeURIComponent(profile) + '&embedded=1&viewer=' + viewer;
+    fetch('/stream/' + encoded + '/h264/' + encodeURIComponent(profile) + '/start?viewer=' + viewer, { method: 'POST' }).catch(function () {});
     if (!overlay.open) {
       returnFocus = document.activeElement;
       scrollPosition = window.scrollY;

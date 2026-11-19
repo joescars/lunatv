@@ -48,6 +48,17 @@ function parseStreamRequest(req, includeFile = false) {
   return { channel, codec, profile, file };
 }
 
+// Optional per-viewer id (?viewer=...) so a shared session can tell viewers
+// apart. Absent -> { viewerId: null } (older clients, e.g. pre-lease Roku
+// builds); present but malformed -> { invalid: true }.
+const VIEWER_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
+function parseViewerId(req) {
+  const raw = req.query.viewer;
+  if (raw === undefined) return { viewerId: null };
+  if (typeof raw !== 'string' || !VIEWER_ID_RE.test(raw)) return { invalid: true };
+  return { viewerId: raw };
+}
+
 router.get('/watch/:channel', async (req, res) => {
   res.set('Cache-Control', 'no-store');
 
@@ -155,6 +166,8 @@ async function getMaxSessions() {
 async function startSession(req, res) {
   const parsed = parseStreamRequest(req);
   if (!parsed) return res.status(400).send('Invalid request');
+  const viewer = parseViewerId(req);
+  if (viewer.invalid) return res.status(400).send('Invalid viewer id');
 
   // Fail open if the device is unreachable: a lineup outage shouldn't block
   // playback, ffmpeg will report the real failure through /ready.
@@ -164,7 +177,8 @@ async function startSession(req, res) {
   }
 
   try {
-    stream.start(parsed.channel, parsed.codec, parsed.profile, await getMaxSessions());
+    stream.start(parsed.channel, parsed.codec, parsed.profile, await getMaxSessions(), viewer.viewerId);
+    if (!viewer.viewerId) stream.startLegacyViewer(parsed.channel, parsed.codec, parsed.profile, req.ip);
   } catch (err) {
     if (err instanceof stream.SessionLimitError) return res.status(503).json({ error: err.message });
     throw err;
@@ -182,19 +196,29 @@ function readyState(req, res) {
 function heartbeat(req, res) {
   const parsed = parseStreamRequest(req);
   if (!parsed) return res.status(400).send('Invalid request');
-  stream.touch(parsed.channel, parsed.codec, parsed.profile, 'heartbeat');
+  const viewer = parseViewerId(req);
+  if (viewer.invalid) return res.status(400).send('Invalid viewer id');
+  stream.touch(parsed.channel, parsed.codec, parsed.profile, 'heartbeat', viewer.viewerId);
   res.status(204).end();
 }
 
+// Sessions are shared by every viewer of a channel/codec/profile, so a stop
+// only releases the caller's own lease; ffmpeg is terminated only when no
+// other viewer is still active (otherwise idle cleanup reaps it later).
+// Clients without a viewer id are tracked by remote address.
 function stopSession(req, res) {
   const parsed = parseStreamRequest(req);
   if (!parsed) return res.status(400).send('Invalid request');
+  const viewer = parseViewerId(req);
+  if (viewer.invalid) return res.status(400).send('Invalid viewer id');
 
-  const session = stream.getSessionInfo(parsed.channel, parsed.codec, parsed.profile);
-  // Do not let a delayed teardown kill a newer same-key session.
-  if (session && session.ageMs >= 2_000) {
-    stream.stopSession(parsed.channel, parsed.codec, parsed.profile, 'client_stop');
-  }
+  stream.release(
+    parsed.channel,
+    parsed.codec,
+    parsed.profile,
+    viewer.viewerId || `legacy:${req.ip}`,
+    'client_stop'
+  );
   return res.status(204).end();
 }
 

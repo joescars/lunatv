@@ -8,7 +8,8 @@
     "start": "node server.js",
     "build:ui": "node scripts/build-ui.mjs",
     "test:ui": "node tests/ui.mjs",
-    "test:server": "node --test tests/server-hardening.cjs"
+    "test:server": "node --test tests/server-hardening.cjs",
+    "test:streams": "node tests/stream-viewers.cjs"
   },
   "dependencies": {
     "compression": "^1.8.1",

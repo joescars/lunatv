@@ -8,6 +8,15 @@ const { sanitizeFfmpegError, terminate } = require('./ffmpegSupport');
 
 const STREAM_ROOT = path.join(os.tmpdir(), 'hdhomerun-web-streams');
 const IDLE_TIMEOUT_MS = 20_000;
+// A viewer lease that has not been refreshed (heartbeat/start) for this long
+// no longer protects a shared session from another viewer's stop. Browser
+// heartbeats arrive every ~4s; keep this at the idle timeout so a lease can
+// never outlive the session it guards.
+const VIEWER_TTL_MS = Number(process.env.STREAM_VIEWER_TTL_MS) || IDLE_TIMEOUT_MS;
+const MAX_VIEWERS_PER_SESSION = 64;
+// Ignore stops this soon after the session spawned so a delayed teardown
+// from a previous page cannot kill a newer same-key session.
+const STOP_MIN_AGE_MS = 2_000;
 const READY_TIMEOUT_MS = 50_000;
 const CAPTION_PROBE_INTERVAL_MS = 15_000;
 const DEFAULT_PROFILE = 'medium';
@@ -563,6 +572,8 @@ function spawnFfmpeg(channel, codec, profile) {
     startedAt: Date.now(),
     lastAccess: Date.now(),
     lastHeartbeat: null,
+    // viewerId -> { lastSeen, legacy }. See touchViewer()/release().
+    viewers: new Map(),
     stopReason: null,
     ffmpeg: ffmpegMeta,
     progress: {
@@ -884,14 +895,50 @@ function getOrCreateSession(channel, codec, profile) {
 // isReady() rather than holding one long HTTP request (tuning can take
 // anywhere from ~5s to ~40s and browsers/hls.js time out long single
 // requests well before that).
-function start(channel, codec, profile, maxSessions) {
+function start(channel, codec, profile, maxSessions, viewerId) {
   // Joining an existing session is a reuse, not a new ffmpeg process, so it is
   // never counted against the cap.
   const key = sessionKey(channel, codec, normalizeProfile(profile));
   if (!sessions.has(key) && Number.isFinite(maxSessions) && sessions.size >= maxSessions) {
     throw new SessionLimitError(maxSessions);
   }
-  getOrCreateSession(channel, codec, profile);
+  const session = getOrCreateSession(channel, codec, profile);
+  if (viewerId) touchViewer(session, viewerId);
+}
+
+function isLeaseActive(lease, now) {
+  // Legacy leases (clients that send no viewer id, e.g. older Roku builds)
+  // never heartbeat, so they are held until that client stops or the whole
+  // session idles out rather than expiring on a timer.
+  return lease.legacy || now - lease.lastSeen <= VIEWER_TTL_MS;
+}
+
+// Records that `viewerId` is watching `session`. The table is bounded:
+// expired leases are dropped first, and when it is still full of active
+// viewers a new one is simply not tracked (it fails open to idle cleanup).
+function touchViewer(session, viewerId, { legacy = false } = {}) {
+  const now = Date.now();
+  const lease = session.viewers.get(viewerId);
+  if (lease) {
+    lease.lastSeen = now;
+    return true;
+  }
+  if (session.viewers.size >= MAX_VIEWERS_PER_SESSION) {
+    for (const [id, other] of session.viewers) {
+      if (!isLeaseActive(other, now)) session.viewers.delete(id);
+    }
+    if (session.viewers.size >= MAX_VIEWERS_PER_SESSION) return false;
+  }
+  session.viewers.set(viewerId, { lastSeen: now, legacy });
+  return true;
+}
+
+function activeViewerCount(session, now = Date.now(), exceptId = null) {
+  let count = 0;
+  for (const [id, lease] of session.viewers) {
+    if (id !== exceptId && isLeaseActive(lease, now)) count += 1;
+  }
+  return count;
 }
 
 function isReady(channel, codec, profile) {
@@ -938,7 +985,7 @@ async function attachSession(channel, codec, profile) {
   return session;
 }
 
-function touch(channel, codec, profile, source = 'access') {
+function touch(channel, codec, profile, source = 'access', viewerId = null) {
   const session = sessions.get(sessionKey(channel, codec, profile));
   if (!session) return;
   session.lastAccess = Date.now();
@@ -946,6 +993,35 @@ function touch(channel, codec, profile, source = 'access') {
     session.lastHeartbeat = Date.now();
     metrics.heartbeats += 1;
   }
+  // Heartbeats (re)register the lease so a viewer whose lease lapsed while
+  // its tab was throttled becomes protective again.
+  if (viewerId && (source === 'heartbeat' || session.viewers.has(viewerId))) {
+    touchViewer(session, viewerId);
+  }
+}
+
+// Registers a client that sends no viewer id (older Roku builds). It is keyed
+// by a caller-supplied label (the request's remote address).
+function startLegacyViewer(channel, codec, profile, label) {
+  const session = sessions.get(sessionKey(channel, codec, profile));
+  if (session && label) touchViewer(session, `legacy:${label}`, { legacy: true });
+}
+
+// Releases one viewer. The shared ffmpeg session is stopped only when no
+// other viewer still holds an active lease; otherwise it keeps running and
+// idle cleanup reaps it once everyone has gone. `viewerId` may be a
+// `legacy:<label>` key for id-less clients. Returns { stopped, remaining }.
+function release(channel, codec, profile, viewerId, reason = 'client_stop') {
+  const session = sessions.get(sessionKey(channel, codec, profile));
+  if (!session) return { stopped: false, remaining: 0 };
+  if (viewerId) session.viewers.delete(viewerId);
+  const now = Date.now();
+  const remaining = activeViewerCount(session, now);
+  if (remaining > 0 || now - session.startedAt < STOP_MIN_AGE_MS) {
+    return { stopped: false, remaining };
+  }
+  stopSession(channel, codec, profile, reason);
+  return { stopped: true, remaining: 0 };
 }
 
 function stopSession(channel, codec, profile, reason = 'manual') {
@@ -969,6 +1045,7 @@ function getMetrics() {
       ageMs: Date.now() - session.startedAt,
       idleMs: Date.now() - session.lastAccess,
       heartbeatAgeMs: session.lastHeartbeat ? Date.now() - session.lastHeartbeat : null,
+      viewers: activeViewerCount(session),
     })),
   };
 }
@@ -1026,6 +1103,7 @@ function getSessionInfo(channel, codec, profile) {
     ageMs: Date.now() - session.startedAt,
     idleMs: Date.now() - session.lastAccess,
     heartbeatAgeMs: session.lastHeartbeat ? Date.now() - session.lastHeartbeat : null,
+    viewers: activeViewerCount(session),
     ffmpeg: { ...session.ffmpeg },
     progress: {
       ...session.progress,
@@ -1080,6 +1158,8 @@ module.exports = {
   start,
   isReady,
   touch,
+  release,
+  startLegacyViewer,
   stopSession,
   channelDir,
   CODECS,
