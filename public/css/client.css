@@ -88,3 +88,4 @@
   .guide-channel-header { gap: .35rem; }
   .btn-watch i[slot="icon"] { display: none; }
 }
+.watch-fullbleed-overlay .player-retry { pointer-events: auto; margin-top: .25rem; }

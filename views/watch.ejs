@@ -8,6 +8,7 @@
     <% } %>
     <div class="watch-fullbleed-overlay">
       <div id="player-status" class="small"><%= channelName || channel %> &middot; Tuning&hellip;</div>
+      <button type="button" id="player-retry" class="btn btn-primary btn-sm player-retry" hidden>Retry</button>
       <div id="captions-status" class="small">Captions: checking stream...</div>
       <% if (recordEnabled) { %>
         <div id="record-status" class="small"></div>
@@ -31,6 +32,7 @@
   </div>
 
   <div id="player-status" class="text-body-secondary small" role="status">Tuning&hellip; usually just a few seconds.</div>
+  <button type="button" id="player-retry" class="btn btn-primary btn-sm mt-2" hidden>Retry</button>
   <div id="captions-status" class="text-body-secondary small">Captions: checking stream...</div>
   <% if (recordEnabled) { %>
     <div id="record-status" class="text-body-secondary small mt-1"></div>
@@ -56,6 +58,7 @@
     var overlayHideTimer = null;
     var recordBtn = document.getElementById('record-btn');
     var recordStatus = document.getElementById('record-status');
+    var retryBtn = document.getElementById('player-retry');
     var profile = chooseProfile();
     var streamBase = '/stream/' + encodeURIComponent(channel) + '/h264/' + encodeURIComponent(profile) + '/';
     var src = streamBase + 'stream.m3u8';
@@ -64,6 +67,18 @@
     var HEARTBEAT_INTERVAL_MS = 4000;
     var READY_RETRY_LIMIT = 4;
     var heartbeatTimer = null;
+    // Bumped on every teardown/start so late timers and fetches from a
+    // previous attempt (or a page that was frozen into bfcache) are ignored.
+    var sessionId = 0;
+    var hlsInstance = null;
+    var pollTimer = null;
+    var captionTimer = null;
+    var nativeHandlers = null;
+    var MAX_RECOVERIES = 3;
+    var RECOVERY_RESET_MS = 60000;
+    var recoveries = { network: 0, media: 0, native: 0 };
+    var lastFatalAt = 0;
+    var recovering = false;
 
     function showStatusOverlay() {
       if (!statusOverlay) return;
@@ -100,7 +115,9 @@
       video.appendChild(track);
     }
 
-    function tryAttachWebVttTrack(attempt) {
+    function tryAttachWebVttTrack(attempt, sid) {
+      if (sid === undefined) sid = sessionId;
+      if (sid !== sessionId) return;
       if (!webvttSidecarEnabled) {
         setCaptionsStatus('Captions: sidecar disabled on server.');
         return;
@@ -113,14 +130,16 @@
           return r.text();
         })
         .then(function (text) {
+          if (sid !== sessionId) return;
           if (!/WEBVTT/.test(text || '')) throw new Error('invalid_sidecar');
           addWebVttTrack(captionsUrl);
           setCaptionsStatus('Captions: WebVTT sidecar attached. Use CC/subtitles control to enable when cues are present.');
           setTimeout(refreshCaptionsStatus, 500);
         })
         .catch(function () {
+          if (sid !== sessionId) return;
           if ((attempt || 0) < 8) {
-            setTimeout(function () { tryAttachWebVttTrack((attempt || 0) + 1); }, 1000);
+            captionTimer = setTimeout(function () { tryAttachWebVttTrack((attempt || 0) + 1, sid); }, 1000);
             return;
           }
           setCaptionsStatus('Captions: no caption cues detected for this stream yet.');
@@ -204,8 +223,6 @@
       heartbeatTimer = null;
     }
 
-    window.addEventListener('pagehide', stopHeartbeat);
-
     function streamFailureText(error) {
       var detail = String(error || '');
       if (/resource busy|device or resource busy|tuner|already in use/i.test(detail)) {
@@ -236,7 +253,62 @@
       }
     }
 
-    function playHls() {
+    function sendStop() {
+      fetch(streamBase + 'stop', { method: 'POST', keepalive: true }).catch(function () {});
+    }
+
+    function showRetry(visible) {
+      if (retryBtn) retryBtn.hidden = !visible;
+    }
+
+    // Releases everything a playback attempt owns: heartbeat, poll/caption
+    // timers, hls.js, native listeners, and the media element's source.
+    function teardownPlayer() {
+      sessionId += 1;
+      clearTimeout(pollTimer);
+      pollTimer = null;
+      clearTimeout(captionTimer);
+      captionTimer = null;
+      stopHeartbeat();
+      if (hlsInstance) {
+        try { hlsInstance.destroy(); } catch (e) {}
+        hlsInstance = null;
+      }
+      if (nativeHandlers) {
+        video.removeEventListener('loadedmetadata', nativeHandlers.loaded);
+        video.removeEventListener('error', nativeHandlers.error);
+        nativeHandlers = null;
+      }
+      var sidecar = video.querySelector('track[data-sidecar="webvtt"]');
+      if (sidecar) sidecar.remove();
+      video.removeAttribute('src');
+      try { video.load(); } catch (e) {}
+    }
+
+    // Terminal failure: stop the heartbeat and release the tuner instead of
+    // leaving a dead player holding it, then offer a manual retry.
+    function failPlayback(message) {
+      teardownPlayer();
+      sendStop();
+      setStatus(message);
+      showRetry(true);
+    }
+
+    function noteFatal() {
+      var now = Date.now();
+      if (now - lastFatalAt > RECOVERY_RESET_MS) recoveries = { network: 0, media: 0, native: 0 };
+      lastFatalAt = now;
+    }
+
+    function onPlaybackStarted() {
+      setStatus('Live');
+      startHeartbeat();
+      attemptAutoplay();
+      tryAttachWebVttTrack(0);
+      setTimeout(refreshCaptionsStatus, 500);
+    }
+
+    function playHls(sid) {
       if (window.Hls && Hls.isSupported()) {
         var hls = new Hls({
           lowLatencyMode: true,
@@ -244,71 +316,104 @@
           maxBufferLength: 10,
           backBufferLength: 30
         });
+        var manifestParsed = false;
+        hlsInstance = hls;
         hls.loadSource(src);
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, function () {
+          if (sid !== sessionId) return;
+          manifestParsed = true;
+          onPlaybackStarted();
+        });
+        hls.on(Hls.Events.FRAG_BUFFERED, function () {
+          if (sid !== sessionId || !recovering) return;
+          recovering = false;
           setStatus('Live');
-          startHeartbeat();
-          attemptAutoplay();
-          tryAttachWebVttTrack(0);
-          setTimeout(refreshCaptionsStatus, 500);
         });
         hls.on(Hls.Events.ERROR, function (event, data) {
-          if (data.fatal) setStatus('Stream error: ' + data.details);
-        });
-        video.textTracks.addEventListener('addtrack', function (e) {
-          // iOS Safari's native CC menu doesn't reliably drive hls.js's
-          // in-band (JS-added) text tracks into 'showing' mode - it can
-          // leave them 'hidden' or flip them to 'disabled' instead. Force
-          // the embedded CEA-608 track on so captions render without
-          // depending on that platform UI.
-          if (e.track && e.track.kind === 'captions' && e.track.label !== 'English CC') {
-            e.track.mode = 'showing';
+          if (sid !== sessionId || !data || !data.fatal) return;
+          noteFatal();
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR && recoveries.network < MAX_RECOVERIES) {
+            recoveries.network += 1;
+            recovering = true;
+            setStatus('Connection problem, retrying (' + recoveries.network + '/' + MAX_RECOVERIES + ')…');
+            // A failed manifest needs a fresh loadSource; startLoad only resumes fragments.
+            if (manifestParsed) hls.startLoad(); else hls.loadSource(src);
+            return;
           }
+          if (data.type === Hls.ErrorTypes.MEDIA_ERROR && recoveries.media < MAX_RECOVERIES) {
+            recoveries.media += 1;
+            recovering = true;
+            setStatus('Playback problem, recovering (' + recoveries.media + '/' + MAX_RECOVERIES + ')…');
+            hls.recoverMediaError();
+            return;
+          }
+          failPlayback('Playback failed: ' + data.details + '. Press Retry to tune again.');
         });
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        var handlers = {
+          loaded: function () {
+            if (sid !== sessionId) return;
+            recovering = false;
+            onPlaybackStarted();
+          },
+          error: function () {
+            if (sid !== sessionId) return;
+            noteFatal();
+            if (recoveries.native < MAX_RECOVERIES) {
+              recoveries.native += 1;
+              recovering = true;
+              setStatus('Playback problem, retrying (' + recoveries.native + '/' + MAX_RECOVERIES + ')…');
+              video.src = src;
+              video.load();
+              return;
+            }
+            failPlayback('Playback failed. Press Retry to tune again.');
+          }
+        };
+        nativeHandlers = handlers;
+        video.addEventListener('loadedmetadata', handlers.loaded);
+        video.addEventListener('error', handlers.error);
         video.src = src;
-        video.addEventListener('loadedmetadata', function () {
-          setStatus('Live');
-          startHeartbeat();
-          attemptAutoplay();
-          tryAttachWebVttTrack(0);
-          setTimeout(refreshCaptionsStatus, 500);
-        });
       } else {
         setStatus('Your browser does not support HLS playback.');
         setCaptionsStatus('Captions: unavailable (no HLS support in this browser).');
       }
     }
 
-    function pollUntilReady(startedAt, consecutiveFailures) {
+    function pollUntilReady(sid, startedAt, consecutiveFailures) {
+      function next(failures) {
+        pollTimer = setTimeout(function () { pollUntilReady(sid, startedAt, failures); }, POLL_INTERVAL_MS);
+      }
       fetch(streamBase + 'ready')
         .then(function (r) { return r.json(); })
         .then(function (state) {
+          if (sid !== sessionId) return;
           if (state.ready) {
-            playHls();
+            playHls(sid);
             return;
           }
           if (state.failed) {
-            setStatus(streamFailureText(state.error));
+            failPlayback(streamFailureText(state.error));
             return;
           }
           if (Date.now() - startedAt > MAX_WAIT_MS) {
-            setStatus('Timed out waiting for the stream to start.');
+            failPlayback('Timed out waiting for the stream to start.');
             return;
           }
-          setTimeout(function () { pollUntilReady(startedAt, 0); }, POLL_INTERVAL_MS);
+          next(0);
         })
         .catch(function () {
+          if (sid !== sessionId) return;
           var failures = (consecutiveFailures || 0) + 1;
+          if (Date.now() - startedAt > MAX_WAIT_MS) {
+            failPlayback('Timed out waiting for the stream to start.');
+            return;
+          }
           if (failures >= READY_RETRY_LIMIT) {
             setStatus('Retrying stream check… network is unstable.');
           }
-          if (Date.now() - startedAt > MAX_WAIT_MS) {
-            setStatus('Timed out waiting for the stream to start.');
-            return;
-          }
-          setTimeout(function () { pollUntilReady(startedAt, failures); }, POLL_INTERVAL_MS);
+          next(failures);
         });
     }
 
@@ -330,17 +435,59 @@
       });
     }
 
-    setStatus('Starting stream (' + profile + ' quality)…');
-    bindCaptionTrackListeners();
-    refreshCaptionsStatus();
-    fetch(streamBase + 'start', { method: 'POST' })
-      .then(function (res) {
-        if (res.ok) { pollUntilReady(Date.now(), 0); return; }
-        return res.json().catch(function () { return {}; }).then(function (body) {
-          setStatus(body.error || 'Stream failed to start (HTTP ' + res.status + ').');
+    // Full handshake: POST start -> poll ready -> load the playlist. Also used
+    // to restart after a bfcache restore or a manual Retry.
+    function beginStream() {
+      teardownPlayer();
+      var sid = sessionId;
+      showRetry(false);
+      recovering = false;
+      setStatus('Starting stream (' + profile + ' quality)…');
+      refreshCaptionsStatus();
+      fetch(streamBase + 'start', { method: 'POST' })
+        .then(function (res) {
+          if (sid !== sessionId) return;
+          if (res.ok) { pollUntilReady(sid, Date.now(), 0); return; }
+          return res.json().catch(function () { return {}; }).then(function (body) {
+            if (sid !== sessionId) return;
+            failPlayback(body.error || 'Stream failed to start (HTTP ' + res.status + ').');
+          });
+        })
+        .catch(function () {
+          if (sid !== sessionId) return;
+          failPlayback('Could not reach the server to start the stream.');
         });
-      })
-      .catch(function () { setStatus('Could not reach the server to start the stream.'); });
+    }
+
+    // Leaving the page (including into bfcache) must not keep the tuner
+    // reserved: drop the heartbeat and the in-flight attempt.
+    window.addEventListener('pagehide', teardownPlayer);
+    // A bfcache restore brings back a torn-down player; start over rather
+    // than reattaching a dead media element.
+    window.addEventListener('pageshow', function (event) {
+      if (!event.persisted) return;
+      recoveries = { network: 0, media: 0, native: 0 };
+      beginStream();
+    });
+    if (retryBtn) {
+      retryBtn.addEventListener('click', function () {
+        recoveries = { network: 0, media: 0, native: 0 };
+        beginStream();
+      });
+    }
+
+    bindCaptionTrackListeners();
+    video.textTracks.addEventListener('addtrack', function (e) {
+      // iOS Safari's native CC menu doesn't reliably drive hls.js's
+      // in-band (JS-added) text tracks into 'showing' mode - it can
+      // leave them 'hidden' or flip them to 'disabled' instead. Force
+      // the embedded CEA-608 track on so captions render without
+      // depending on that platform UI.
+      if (e.track && e.track.kind === 'captions' && e.track.label !== 'English CC') {
+        e.track.mode = 'showing';
+      }
+    });
+    beginStream();
   })();
 </script>
 
