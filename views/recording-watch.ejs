@@ -6,6 +6,7 @@
 </div>
 <div class="ratio ratio-16x9 player-panel mb-3"><video id="player" controls autoplay playsinline></video></div>
 <div id="player-status" class="text-body-secondary small" role="status">Preparing recording…</div>
+<button type="button" id="player-retry" class="btn btn-primary btn-sm mt-2" hidden>Retry</button>
 <% if (recording.Synopsis) { %><p class="small text-body-secondary mt-3 mb-0"><%= recording.Synopsis %></p><% } %>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js?v=<%= assetVersion %>"></script>
@@ -15,34 +16,157 @@
     var profile = 'medium';
     var video = document.getElementById('player');
     var status = document.getElementById('player-status');
+    var retryBtn = document.getElementById('player-retry');
     var base = '/recordings/' + encodeURIComponent(id) + '/' + profile + '/';
-    var attempts = 0;
+    var src = base + 'stream.m3u8';
+    var MAX_RECOVERIES = 3;
+    var RECOVERY_RESET_MS = 60000;
+    // Bumped on every teardown/start so late timers and fetches from a
+    // previous attempt (or a page frozen into bfcache) are ignored.
+    var sessionId = 0;
+    var hlsInstance = null;
+    var pollTimer = null;
+    var nativeHandlers = null;
+    var recoveries = { network: 0, media: 0, native: 0 };
+    var lastFatalAt = 0;
 
     function setStatus(text) { status.textContent = text; }
-    function attach() {
-      var src = base + 'stream.m3u8';
+    function sendStop() { fetch(base + 'stop', { method: 'POST', keepalive: true }).catch(function () {}); }
+    function showRetry(visible) { retryBtn.hidden = !visible; }
+    function resetRecoveries() { recoveries = { network: 0, media: 0, native: 0 }; }
+    function noteFatal() {
+      var now = Date.now();
+      if (now - lastFatalAt > RECOVERY_RESET_MS) resetRecoveries();
+      lastFatalAt = now;
+    }
+
+    function teardownPlayer() {
+      sessionId += 1;
+      clearTimeout(pollTimer);
+      pollTimer = null;
+      if (hlsInstance) {
+        try { hlsInstance.destroy(); } catch (e) {}
+        hlsInstance = null;
+      }
+      if (nativeHandlers) {
+        video.removeEventListener('loadedmetadata', nativeHandlers.loaded);
+        video.removeEventListener('error', nativeHandlers.error);
+        nativeHandlers = null;
+      }
+      video.removeAttribute('src');
+      try { video.load(); } catch (e) {}
+    }
+
+    // Terminal failure: release the server-side transcode and offer a retry.
+    function failPlayback(message) {
+      teardownPlayer();
+      sendStop();
+      setStatus(message);
+      showRetry(true);
+    }
+
+    function attach(sid) {
       if (window.Hls && Hls.isSupported()) {
         var hls = new Hls();
+        var manifestParsed = false;
+        hlsInstance = hls;
         hls.loadSource(src);
         hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, function () { setStatus(''); video.play().catch(function () {}); });
-        hls.on(Hls.Events.ERROR, function (_, data) { if (data.fatal) setStatus('Playback failed: ' + data.details); });
+        hls.on(Hls.Events.MANIFEST_PARSED, function () {
+          if (sid !== sessionId) return;
+          manifestParsed = true;
+          setStatus('');
+          video.play().catch(function () {});
+        });
+        hls.on(Hls.Events.FRAG_BUFFERED, function () {
+          if (sid === sessionId && /^(Connection|Playback) problem/.test(status.textContent)) setStatus('');
+        });
+        hls.on(Hls.Events.ERROR, function (_, data) {
+          if (sid !== sessionId || !data || !data.fatal) return;
+          noteFatal();
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR && recoveries.network < MAX_RECOVERIES) {
+            recoveries.network += 1;
+            setStatus('Connection problem, retrying (' + recoveries.network + '/' + MAX_RECOVERIES + ')…');
+            // A failed manifest needs a fresh loadSource; startLoad only resumes fragments.
+            if (manifestParsed) hls.startLoad(); else hls.loadSource(src);
+            return;
+          }
+          if (data.type === Hls.ErrorTypes.MEDIA_ERROR && recoveries.media < MAX_RECOVERIES) {
+            recoveries.media += 1;
+            setStatus('Playback problem, recovering (' + recoveries.media + '/' + MAX_RECOVERIES + ')…');
+            hls.recoverMediaError();
+            return;
+          }
+          failPlayback('Playback failed: ' + data.details + '. Press Retry to prepare it again.');
+        });
       } else {
+        var handlers = {
+          loaded: function () {
+            if (sid !== sessionId) return;
+            setStatus('');
+            video.play().catch(function () {});
+          },
+          error: function () {
+            if (sid !== sessionId) return;
+            noteFatal();
+            if (recoveries.native < MAX_RECOVERIES) {
+              recoveries.native += 1;
+              setStatus('Playback problem, retrying (' + recoveries.native + '/' + MAX_RECOVERIES + ')…');
+              video.src = src;
+              video.load();
+              return;
+            }
+            failPlayback('Playback failed. Press Retry to prepare it again.');
+          }
+        };
+        nativeHandlers = handlers;
+        video.addEventListener('loadedmetadata', handlers.loaded);
+        video.addEventListener('error', handlers.error);
         video.src = src;
-        video.addEventListener('loadedmetadata', function () { setStatus(''); video.play().catch(function () {}); }, { once: true });
       }
     }
-    function waitForReady() {
+
+    function waitForReady(sid, attempts) {
       fetch(base + 'ready', { cache: 'no-store' }).then(function (res) { return res.json(); }).then(function (state) {
-        if (state.ready) return attach();
-        if (state.error || attempts++ >= 60) return setStatus(state.error || 'Recording took too long to prepare.');
-        setTimeout(waitForReady, 500);
-      }).catch(function () { setTimeout(waitForReady, 500); });
+        if (sid !== sessionId) return;
+        if (state.ready) return attach(sid);
+        if (state.error || attempts >= 60) return failPlayback(state.error || 'Recording took too long to prepare.');
+        pollTimer = setTimeout(function () { waitForReady(sid, attempts + 1); }, 500);
+      }).catch(function () {
+        if (sid !== sessionId) return;
+        if (attempts >= 60) return failPlayback('Recording took too long to prepare.');
+        pollTimer = setTimeout(function () { waitForReady(sid, attempts + 1); }, 500);
+      });
     }
+
+    // Full handshake: POST start -> poll ready -> load the playlist. Also used
+    // to restart after a bfcache restore or a manual Retry.
+    function beginStream() {
+      teardownPlayer();
+      var sid = sessionId;
+      showRetry(false);
+      setStatus('Preparing recording…');
+      fetch(base + 'start', { method: 'POST' })
+        .then(function () { if (sid === sessionId) waitForReady(sid, 0); })
+        .catch(function () { if (sid === sessionId) failPlayback('Unable to prepare recording.'); });
+    }
+
+    // pagehide stops the server-side session; a bfcache restore therefore
+    // finds it gone and must restart rather than reattach a dead player.
     window.addEventListener('pagehide', function () {
-      fetch(base + 'stop', { method: 'POST', keepalive: true }).catch(function () {});
+      teardownPlayer();
+      sendStop();
     });
-    fetch(base + 'start', { method: 'POST' }).then(waitForReady).catch(function () { setStatus('Unable to prepare recording.'); });
+    window.addEventListener('pageshow', function (event) {
+      if (!event.persisted) return;
+      resetRecoveries();
+      beginStream();
+    });
+    retryBtn.addEventListener('click', function () {
+      resetRecoveries();
+      beginStream();
+    });
+    beginStream();
   })();
 </script>
 
