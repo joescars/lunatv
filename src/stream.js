@@ -4,6 +4,7 @@ const path = require('path');
 const os = require('os');
 
 const hdhr = require('./hdhomerun');
+const { sanitizeFfmpegError, terminate } = require('./ffmpegSupport');
 
 const STREAM_ROOT = path.join(os.tmpdir(), 'hdhomerun-web-streams');
 const IDLE_TIMEOUT_MS = 20_000;
@@ -368,9 +369,13 @@ function getCaptionConfig(codec) {
 
 function getDecodeConfig() {
   if (STREAM_DECODE_MODE === 'sw') {
+    // No forced input decoder: the source codec is unknown up front (ATSC 1.0
+    // is MPEG-2, but cable/other channels can be H.264 or HEVC), and without a
+    // -hwaccel flag ffmpeg already picks the matching software decoder. The QSV
+    // device is only needed for the hwupload before the hardware encoder.
     return {
-      decoder: 'mpeg2video',
-      inputArgs: ['-init_hw_device', 'qsv=hw', '-filter_hw_device', 'hw', '-c:v', 'mpeg2video'],
+      decoder: 'auto_software',
+      inputArgs: ['-init_hw_device', 'qsv=hw', '-filter_hw_device', 'hw'],
       preEncodeArgs: ['-vf', 'format=nv12,hwupload=extra_hw_frames=64'],
     };
   }
@@ -708,23 +713,32 @@ function spawnFfmpeg(channel, codec, profile) {
     stderrTail = `${stderrTail}${message}\n`.slice(-4000);
     metrics.sessionsExited += 1;
     metrics.sessionsStoppedError += 1;
-    if (sessions.get(key) === session) sessions.delete(key);
-    failedSessions.set(key, { error: stderrTail, expires: Date.now() + FAILED_SESSION_TTL_MS });
-    if (isProcessAlive(session.webvttProcess)) {
-      session.webvttProcess.kill('SIGTERM');
+    const owner = sessions.get(key) === session;
+    if (owner) {
+      sessions.delete(key);
+      failedSessions.set(key, { error: stderrTail, expires: Date.now() + FAILED_SESSION_TTL_MS });
     }
-    fs.rmSync(dir, { recursive: true, force: true });
+    if (isProcessAlive(session.webvttProcess)) {
+      terminate(session.webvttProcess);
+    }
+    if (owner) fs.rmSync(dir, { recursive: true, force: true });
   });
 
   proc.on('exit', () => {
+    // The 'error' handler may already have finalized this session (and a new
+    // session may since have taken over the key and the shared directory).
+    // Finalizing twice would double-count metrics, evict the newer session
+    // from the map and delete its output directory.
+    if (session.exited) return;
     metrics.sessionsExited += 1;
     if (session.stopReason === 'idle_timeout') metrics.sessionsStoppedIdle += 1;
     if (session.stopReason === 'startup_error') metrics.sessionsStoppedError += 1;
     session.exited = true;
-    sessions.delete(key);
+    const owner = sessions.get(key) === session;
+    if (owner) sessions.delete(key);
     // Remember unintentional exits briefly so /ready can report the failure
     // instead of an empty "not ready" after the session is gone.
-    if (!session.stopReason || session.stopReason === 'startup_error') {
+    if (owner && (!session.stopReason || session.stopReason === 'startup_error')) {
       failedSessions.set(key, {
         error: stderrTail || 'ffmpeg exited before producing output',
         expires: Date.now() + FAILED_SESSION_TTL_MS,
@@ -733,16 +747,18 @@ function spawnFfmpeg(channel, codec, profile) {
     console.info(
       `[stream] session exited channel=${channel} codec=${codec} profile=${normalizedProfile} reason=${session.stopReason || 'process_exit'}`
     );
-    if (session.stopReason === 'startup_error' && stderrTail) {
+    // Full ffmpeg output stays in the server log; clients only get a
+    // sanitized summary (see sanitizeFfmpegError).
+    if ((!session.stopReason || session.stopReason === 'startup_error') && stderrTail) {
       const oneLine = stderrTail.replace(/\s+/g, ' ').trim();
       if (oneLine) {
         console.warn(`[stream] ffmpeg tail channel=${channel} codec=${codec}: ${oneLine.slice(-1200)}`);
       }
     }
     if (isProcessAlive(session.webvttProcess)) {
-      session.webvttProcess.kill('SIGTERM');
+      terminate(session.webvttProcess);
     }
-    fs.rmSync(dir, { recursive: true, force: true });
+    if (owner) fs.rmSync(dir, { recursive: true, force: true });
   });
 
   return session;
@@ -840,7 +856,7 @@ async function waitForPlaylist(session) {
   const start = Date.now();
   while (Date.now() - start < READY_TIMEOUT_MS) {
     if (session.exited) {
-      throw new Error(`ffmpeg exited before producing output:\n${session.stderrTail()}`);
+      throw new Error(sanitizeFfmpegError(session.stderrTail(), 'ffmpeg exited before producing output.'));
     }
     if (fs.existsSync(session.playlist)) {
       return;
@@ -884,12 +900,12 @@ function isReady(channel, codec, profile) {
   if (!session) {
     const failure = failedSessions.get(key);
     if (failure && failure.expires > Date.now()) {
-      return { ready: false, failed: true, error: failure.error };
+      return { ready: false, failed: true, error: sanitizeFfmpegError(failure.error) };
     }
     failedSessions.delete(key);
     return { ready: false, failed: false };
   }
-  if (session.exited) return { ready: false, failed: true, error: session.stderrTail() };
+  if (session.exited) return { ready: false, failed: true, error: sanitizeFfmpegError(session.stderrTail()) };
   return { ready: fs.existsSync(session.playlist), failed: false };
 }
 
@@ -937,9 +953,9 @@ function stopSession(channel, codec, profile, reason = 'manual') {
   if (!session) return;
   session.stopReason = reason;
   if (isProcessAlive(session.webvttProcess)) {
-    session.webvttProcess.kill('SIGTERM');
+    terminate(session.webvttProcess);
   }
-  session.process.kill('SIGTERM');
+  terminate(session.process);
 }
 
 function getMetrics() {

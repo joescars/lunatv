@@ -94,6 +94,9 @@ router.post('/watch/:channel/record', async (req, res) => {
   try {
     const program = await guide.getCurrentProgram(channel);
     if (!program) return res.status(404).json({ error: 'No current program found for this channel' });
+    if (!program.SeriesID) {
+      return res.status(422).json({ error: 'This program has no series ID, so it cannot be recorded' });
+    }
 
     await record.recordCurrentAiring({
       seriesId: program.SeriesID,
@@ -103,7 +106,7 @@ router.post('/watch/:channel/record', async (req, res) => {
 
     res.json({ recording: true, title: program.Title, episodeTitle: program.EpisodeTitle || null });
   } catch (err) {
-    res.status(502).json({ error: err.message });
+    res.status(err.status || 502).json({ error: err.message });
   }
 });
 

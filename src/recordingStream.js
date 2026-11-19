@@ -2,6 +2,9 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
+
+const { sanitizeFfmpegError, terminate } = require('./ffmpegSupport');
 
 const ROOT = path.join(os.tmpdir(), 'hdhomerun-web-recordings');
 const IDLE_TIMEOUT_MS = 60_000;
@@ -29,7 +32,7 @@ function finished(session) {
 function stop(session, sessionKey) {
   if (!session) return;
   if (session.process.exitCode === null) {
-    if (!session.process.killed) session.process.kill('SIGTERM');
+    terminate(session.process);
     return;
   }
   // Already exited (e.g. finished VOD kept for seeking): stop means release it.
@@ -52,8 +55,9 @@ function start(id, sourceUrl, profile) {
     return existing;
   }
 
-  const dir = path.join(ROOT, `${id}-${normalizedProfile}`);
-  fs.rmSync(dir, { recursive: true, force: true });
+  // Unique per session: a restart must not rm/mkdir a directory an older,
+  // still-shutting-down ffmpeg for the same id/profile may be writing into.
+  const dir = path.join(ROOT, `${id}-${normalizedProfile}-${crypto.randomBytes(6).toString('hex')}`);
   fs.mkdirSync(dir, { recursive: true });
   const config = PROFILES[normalizedProfile];
   const playlist = path.join(dir, 'stream.m3u8');
@@ -81,19 +85,25 @@ function start(id, sourceUrl, profile) {
     stderr = `${stderr}${err && err.message ? err.message : 'ffmpeg failed to spawn'}\n`.slice(-4000);
     console.error(`[recording-stream] ffmpeg error id=${id}: ${err && err.message}`);
     session.spawnError = err && err.message ? err.message : 'ffmpeg failed to spawn';
-    if (sessions.get(sessionKey) === session) fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(dir, { recursive: true, force: true });
     // 'exit' never fires on spawn failure; drop the failed session after the idle window.
     setTimeout(() => {
       if (sessions.get(sessionKey) === session) sessions.delete(sessionKey);
     }, IDLE_TIMEOUT_MS).unref();
   });
   process.on('exit', (code) => {
-    // Clean EOF: keep the finished playlist (EXT-X-ENDLIST) and segments so the
-    // player can finish and seek; the idle sweep / stop removes them.
-    if (code === 0) return;
-    // Only the session that still owns the dir may remove it; a restart of the
-    // same id/profile replaces the session and recreates the dir.
-    if (sessions.get(sessionKey) === session) fs.rmSync(dir, { recursive: true, force: true });
+    const owner = sessions.get(sessionKey) === session;
+    // Clean EOF of the current session: keep the finished playlist
+    // (EXT-X-ENDLIST) and segments so the player can finish and seek; the idle
+    // sweep / stop removes them.
+    if (code === 0 && owner) return;
+    if (code !== 0 && stderr) {
+      console.warn(`[recording-stream] ffmpeg tail id=${id}: ${stderr.replace(/\s+/g, ' ').trim().slice(-1200)}`);
+    }
+    // The dir is unique to this session, so removing it is always safe -
+    // including after a restart replaced this session in the map.
+    fs.rmSync(dir, { recursive: true, force: true });
+    if (!owner) return;
     setTimeout(() => {
       if (sessions.get(sessionKey) === session) sessions.delete(sessionKey);
     }, IDLE_TIMEOUT_MS).unref();
@@ -115,9 +125,9 @@ function stopById(id, profile) {
 function isReady(id, profile) {
   const session = get(id, profile);
   if (!session) return { ready: false, error: 'Recording stream has not started' };
-  if (session.spawnError) return { ready: false, error: session.spawnError };
+  if (session.spawnError) return { ready: false, error: sanitizeFfmpegError(session.spawnError) };
   if (fs.existsSync(session.playlist)) return { ready: true };
-  if (session.process.exitCode !== null) return { ready: false, error: session.stderr() || 'Transcoder stopped' };
+  if (session.process.exitCode !== null) return { ready: false, error: sanitizeFfmpegError(session.stderr(), 'Transcoder stopped') };
   return { ready: false };
 }
 
@@ -129,4 +139,4 @@ setInterval(() => {
   }
 }, 15_000).unref();
 
-module.exports = { start, stopById, get, isReady, normalizeProfile, PROFILES };
+module.exports = { start, stopById, get, isReady, normalizeProfile, PROFILES, _sessions: sessions };
