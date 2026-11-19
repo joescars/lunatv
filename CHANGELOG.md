@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## Unreleased
+
+### Fixed: one viewer stopping no longer kills a shared stream (#32)
+
+- Browser start/heartbeat/stop now carry a per-tab `?viewer=<id>` (random, 8-64
+  chars of `[A-Za-z0-9_-]`; malformed ids get 400). A stop releases only that
+  viewer, and ffmpeg is stopped only when no other viewer's lease (refreshed by
+  start/heartbeat, 20s TTL) is active; otherwise idle cleanup reaps it.
+- Clients without an id (older Roku builds) keep the old handshake and are
+  tracked per remote address, so a bare stop cannot end a session that
+  identified viewers still hold.
+- `npm run test:streams` probes this with a fake ffmpeg.
+
 ## 2026-11-17
 
 ### Fixed: bug review 2 (#38)

@@ -57,6 +57,8 @@
     var recordBtn = document.getElementById('record-btn');
     var recordStatus = document.getElementById('record-status');
     var profile = chooseProfile();
+    var viewerId = chooseViewerId();
+    var viewerQuery = '?viewer=' + encodeURIComponent(viewerId);
     var streamBase = '/stream/' + encodeURIComponent(channel) + '/h264/' + encodeURIComponent(profile) + '/';
     var src = streamBase + 'stream.m3u8';
     var POLL_INTERVAL_MS = 500;
@@ -188,8 +190,27 @@
       return 'medium';
     }
 
+    // Identifies this tab to the server: the stream session is shared by every
+    // viewer of the channel/profile, so start/heartbeat/stop carry this id and
+    // leaving only releases our own hold. The guide overlay passes its id in
+    // ?viewer= so its early /start and this page are one viewer.
+    function chooseViewerId() {
+      var pattern = /^[A-Za-z0-9_-]{8,64}$/;
+      var supplied = new URLSearchParams(window.location.search).get('viewer');
+      if (supplied && pattern.test(supplied)) return supplied;
+      var c = window.crypto;
+      if (c && typeof c.randomUUID === 'function') return c.randomUUID();
+      var bytes = new Uint8Array(16);
+      if (c && typeof c.getRandomValues === 'function') {
+        c.getRandomValues(bytes);
+      } else {
+        for (var i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+      }
+      return Array.prototype.map.call(bytes, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+    }
+
     function sendHeartbeat() {
-      fetch(streamBase + 'heartbeat', { method: 'POST', keepalive: true }).catch(function () {});
+      fetch(streamBase + 'heartbeat' + viewerQuery, { method: 'POST', keepalive: true }).catch(function () {});
     }
 
     function startHeartbeat() {
@@ -204,7 +225,19 @@
       heartbeatTimer = null;
     }
 
-    window.addEventListener('pagehide', stopHeartbeat);
+    // Release only our own hold; the server keeps ffmpeg running if another
+    // viewer is still watching this channel.
+    function releaseStream() {
+      stopHeartbeat();
+      fetch(streamBase + 'stop' + viewerQuery, { method: 'POST', keepalive: true }).catch(function () {});
+    }
+
+    window.addEventListener('pagehide', releaseStream);
+    // A page restored from the back/forward cache lost its hold and player
+    // state at pagehide; reload to run the start handshake again.
+    window.addEventListener('pageshow', function (event) {
+      if (event.persisted) window.location.reload();
+    });
 
     function streamFailureText(error) {
       var detail = String(error || '');
@@ -333,7 +366,7 @@
     setStatus('Starting stream (' + profile + ' quality)…');
     bindCaptionTrackListeners();
     refreshCaptionsStatus();
-    fetch(streamBase + 'start', { method: 'POST' })
+    fetch(streamBase + 'start' + viewerQuery, { method: 'POST' })
       .then(function (res) {
         if (res.ok) { pollUntilReady(Date.now(), 0); return; }
         return res.json().catch(function () { return {}; }).then(function (body) {

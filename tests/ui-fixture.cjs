@@ -40,7 +40,7 @@ record.getPlaybackUrl = () => 'synthetic-recording';
 record.deleteRecording = async () => {};
 record.recordCurrentAiring = async () => {};
 function mockModule(path, exports) { require.cache[require.resolve(path)] = { id: require.resolve(path), filename: require.resolve(path), loaded: true, exports }; }
-mockModule('../src/stream', { STREAM_PROFILES: ['low', 'medium', 'high'], DEFAULT_PROFILE: 'medium', start() {}, touch() {}, isReady: () => ({ ready: false, failed: true, error: 'Synthetic fixture has no live tuner' }) });
+mockModule('../src/stream', { STREAM_PROFILES: ['low', 'medium', 'high'], DEFAULT_PROFILE: 'medium', start() {}, touch() {}, release() {}, startLegacyViewer() {}, isReady: () => ({ ready: false, failed: true, error: 'Synthetic fixture has no live tuner' }) });
 mockModule('../src/recordingStream', { PROFILES: { medium: {} }, start() {}, isReady: () => ({ ready: false, error: 'Synthetic fixture has no video' }) });
 process.on('message', message => {
   scenario = message.scenario;
