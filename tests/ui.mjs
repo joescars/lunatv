@@ -209,7 +209,7 @@ try {
     p.on('pageerror', error => errors.push(error.message));
     const requests = [];
     await p.route('**/hls.min.js*', route => route.fulfill({ contentType: 'text/javascript', body: hls ? hlsStub : '' }));
-    await p.route(/\/(stream|recordings)\/.*\/(start|ready|heartbeat|stop)$/, route => {
+    await p.route(/\/(stream|recordings)\/.*\/(start|ready|heartbeat|stop)(\?.*)?$/, route => {
       const request = route.request();
       const name = new URL(request.url()).pathname.split('/').pop();
       requests.push(name);
@@ -317,6 +317,37 @@ try {
     const row = page.locator('#channel-3-1');
     await row.locator('button').first().click();
     await page.waitForFunction(() => document.querySelector('#channel-3-1 button').getAttribute('aria-pressed') === 'true');
+  });
+  await check('Failed htmx requests surface a dismissible alert instead of failing silently', async () => {
+    await page.route('**/admin/channels/flag*', route => route.fulfill({ status: 500, contentType: 'text/plain', body: 'device offline' }));
+    try {
+      await goto('/admin/channels');
+      await page.locator('#channel-3-1 button').first().click();
+      const alert = page.locator('#htmx-errors [role="alert"]');
+      await alert.waitFor();
+      assert.match(await alert.textContent(), /Couldn’t update the channel \(HTTP 500: device offline\)/);
+      assert.equal(await page.locator('#channel-3-1 button').first().isEnabled(), true, 'button is usable again after the error');
+      await alert.locator('.btn-close').click();
+      assert.equal(await page.locator('#htmx-errors [role="alert"]').count(), 0);
+    } finally { await page.unroute('**/admin/channels/flag*'); }
+  });
+  await check('Bootstrap, icons, htmx and hls.js are served locally (works offline)', async () => {
+    const externalRequests = [];
+    const probe = await context.newPage();
+    probe.on('request', request => { if (!request.url().startsWith(origin) && !request.url().startsWith('data:')) externalRequests.push(request.url()); });
+    try {
+      for (const route of ['/guide', '/admin/channels', '/watch/2.1', '/recordings/abcdef/watch']) {
+        await probe.goto(origin + route);
+        await probe.waitForLoadState('networkidle');
+        const html = await probe.content();
+        const external = html.match(/<(?:script[^>]+src|link[^>]+href)="https?:\/\/[^"]*/);
+        assert.equal(external, null, `${route} references an external asset: ${external}`);
+      }
+      assert.equal(await probe.evaluate(() => typeof window.htmx), 'object');
+      assert.equal(await probe.evaluate(() => typeof window.bootstrap), 'object');
+      for (const asset of ['/vendor/hls.min.js', '/vendor/bootstrap-icons/fonts/bootstrap-icons.woff2']) assert.equal((await fetch(origin + asset)).status, 200, asset);
+      assert.deepEqual(externalRequests, []);
+    } finally { await probe.close(); }
   });
   await check('Channel filters are re-applied after Hide/Unfavorite row swaps', async () => {
     await goto('/admin/channels');

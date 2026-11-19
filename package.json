@@ -9,7 +9,8 @@
     "build:ui": "node scripts/build-ui.mjs",
     "test:ui": "node tests/ui.mjs",
     "test:server": "node --test tests/server-hardening.cjs",
-    "test:streams": "node tests/stream-viewers.cjs"
+    "test:streams": "node tests/stream-viewers.cjs",
+    "test:roku": "node --test tests/roku-static.cjs"
   },
   "dependencies": {
     "compression": "^1.8.1",
@@ -20,7 +21,11 @@
     "@axe-core/playwright": "^4.14.0",
     "@fontsource-variable/roboto": "^5.2.10",
     "@material/web": "^2.4.1",
+    "bootstrap": "5.3.3",
+    "bootstrap-icons": "1.11.3",
     "esbuild": "^0.25.12",
+    "hls.js": "1.5.17",
+    "htmx.org": "1.9.12",
     "playwright": "^1.64.1"
   }
 }

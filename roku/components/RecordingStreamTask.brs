@@ -23,8 +23,10 @@ sub startRecordingStream()
                 m.top.result = { success: true }
                 return
             end if
-            if state <> invalid and state.error <> invalid and state.error <> ""
-                m.top.result = { success: false, error: state.error }
+            if state <> invalid and (state.failed = true or (state.error <> invalid and state.error <> ""))
+                errMsg = "Recording could not be prepared"
+                if state.error <> invalid and state.error <> "" then errMsg = state.error
+                m.top.result = { success: false, error: errMsg }
                 return
             end if
         end if

@@ -6,6 +6,15 @@
 ' roUrlTransfer + roMessagePort + wait() pattern so a hung connection can
 ' never wedge the app.
 
+' Enables certificate verification for https:// server URLs (deploy.sh allows
+' them). Without a CA bundle every https request fails. Plain http:// URLs
+' skip this so the common LAN setup is unchanged.
+sub Net_ConfigureTls(xfer as object, url as string)
+    if Left(LCase(url), 8) <> "https://" then return
+    xfer.SetCertificatesFile("common:/certs/ca-bundle.crt")
+    xfer.InitClientCertificates()
+end sub
+
 ' Performs a GET request with a timeout.
 ' Returns an associative array: { success: boolean, code: integer, body: string, error: string }
 function Net_HttpGet(url as string, timeoutMs as integer) as object
@@ -13,6 +22,7 @@ function Net_HttpGet(url as string, timeoutMs as integer) as object
     port = CreateObject("roMessagePort")
     xfer.SetMessagePort(port)
     xfer.SetUrl(url)
+    Net_ConfigureTls(xfer, url)
     xfer.SetRequest("GET")
     xfer.EnableEncodings(true)
     xfer.RetainBodyOnError(true)
@@ -48,6 +58,7 @@ function Net_HttpPost(url as string, timeoutMs as integer) as object
     port = CreateObject("roMessagePort")
     xfer.SetMessagePort(port)
     xfer.SetUrl(url)
+    Net_ConfigureTls(xfer, url)
     xfer.EnableEncodings(true)
     xfer.RetainBodyOnError(true)
     xfer.AddHeader("Content-Length", "0")

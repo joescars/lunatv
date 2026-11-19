@@ -9,7 +9,7 @@
 <button type="button" id="player-retry" class="btn btn-primary btn-sm mt-2" hidden>Retry</button>
 <% if (recording.Synopsis) { %><p class="small text-body-secondary mt-3 mb-0"><%= recording.Synopsis %></p><% } %>
 
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js?v=<%= assetVersion %>"></script>
+<script src="/vendor/hls.min.js?v=<%= assetVersion %>"></script>
 <script>
   (function () {
     var id = <%- JSON.stringify(recording.id) %>;
@@ -99,7 +99,7 @@
           }
           failPlayback('Playback failed: ' + data.details + '. Press Retry to prepare it again.');
         });
-      } else {
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         var handlers = {
           loaded: function () {
             if (sid !== sessionId) return;
@@ -123,6 +123,8 @@
         video.addEventListener('loadedmetadata', handlers.loaded);
         video.addEventListener('error', handlers.error);
         video.src = src;
+      } else {
+        failPlayback(window.Hls ? 'Your browser does not support HLS playback.' : 'The video player (hls.js) did not load. Reload the page; if this persists, check the LunaTV server.');
       }
     }
 

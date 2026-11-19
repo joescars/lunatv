@@ -31,7 +31,10 @@ sub onStreamResult(event as object)
             err = result.error
             if err <> invalid and GetInterface(err, "ifString") <> invalid and err <> "" then reason = err
         end if
-        m.status.text = "Playback failed: " + reason
+        if result <> invalid and GetInterface(result, "ifAssociativeArray") <> invalid and result.error <> invalid
+            print "[RecordingPlayerScreen] playback preparation failed: "; result.error
+        end if
+        m.status.text = friendlyError("Playback failed", reason)
         return
     end if
     content = CreateObject("roSGNode", "ContentNode")
@@ -45,7 +48,15 @@ sub onStreamResult(event as object)
 end sub
 
 sub onVideoState(event as object)
-    if event.getData() = "error" then m.status.text = "Playback error"
+    if event.getData() = "error"
+        if m.video.errorMsg <> invalid and m.video.errorMsg <> ""
+            print "[RecordingPlayerScreen] playback error: "; m.video.errorMsg
+        end if
+        m.video.visible = false
+        m.overlay.visible = true
+        m.status.visible = true
+        m.status.text = friendlyError("Playback error", m.video.errorMsg)
+    end if
 end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean
@@ -53,6 +64,7 @@ function onKeyEvent(key as string, press as boolean) as boolean
         m.closed = true
         cancelStreamTask()
         m.video.control = "stop"
+        requestRecordingStop()
         m.top.closed = true
         return true
     end if
@@ -65,4 +77,15 @@ sub cancelStreamTask()
         m.task.control = "STOP"
         m.task = invalid
     end if
+end sub
+
+' Releases the server-side transcode now instead of waiting for its idle
+' timeout. Safe if /start never completed: the server treats stop as a no-op.
+sub requestRecordingStop()
+    if m.top.recordingId = invalid or m.top.recordingId = "" then return
+    task = CreateObject("roSGNode", "RecordingStopTask")
+    task.serverUrl = m.top.serverUrl
+    task.recordingId = m.top.recordingId
+    task.profile = "medium"
+    task.control = "RUN"
 end sub

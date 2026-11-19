@@ -4,13 +4,21 @@
   var container = document.getElementById('guide-inner');
   var scroller = document.querySelector('.guide-scroll');
   if (!container || !scroller) return;
-  var rangeStart = data.now - data.now % 1800;
+  var rangeStart = alignHalfHour(data.now);
   var pxPerMinute = 5;
   var colWidth = 148;
   var firstRender = true;
   var nowLine;
   var resizeTimer;
 
+  // Half-hour boundaries are local wall-clock boundaries; UTC alignment is
+  // 15 minutes off in zones such as UTC+5:45 or UTC+12:45.
+  function alignHalfHour(ts) {
+    var offset = new Date(ts * 1000).getTimezoneOffset() * 60;
+    var local = ts - offset;
+    return local - local % 1800 + offset;
+  }
+  function dayKey(ts) { var d = new Date(ts * 1000); return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); }
   function minutes(ts) { return (ts - rangeStart) / 60; }
   function fmt(ts) { return new Date(ts * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
   function make(tag, className, text) {
@@ -45,7 +53,7 @@
     var pageY = window.scrollY;
     var saved = captureFocus();
     data = next;
-    rangeStart = data.now - data.now % 1800;
+    rangeStart = alignHalfHour(data.now);
     render({ leftTime: leftTime });
     restoreFocus(saved);
     window.scrollTo(0, pageY);
@@ -68,8 +76,15 @@
     header.appendChild(make('div', 'guide-header-spacer', new Date(data.now * 1000).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })));
     var headerTrack = make('div', 'guide-header-track');
     headerTrack.style.width = trackWidth + 'px';
+    var labelDay = dayKey(data.now);
     for (var time = rangeStart; time < rangeEnd; time += 1800) {
-      var label = make('div', 'guide-time-label', fmt(time));
+      // Labels after midnight carry the weekday so they are not ambiguous.
+      var text = fmt(time);
+      if (dayKey(time) !== labelDay) {
+        labelDay = dayKey(time);
+        text = new Date(time * 1000).toLocaleDateString([], { weekday: 'short' }) + ' ' + text;
+      }
+      var label = make('div', 'guide-time-label', text);
       label.style.left = minutes(time) * pxPerMinute + 'px';
       label.style.width = 30 * pxPerMinute + 'px';
       headerTrack.appendChild(label);

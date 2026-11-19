@@ -39,7 +39,7 @@
   <% } %>
 <% } %>
 
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js?v=<%= assetVersion %>"></script>
+<script src="/vendor/hls.min.js?v=<%= assetVersion %>"></script>
 <script>
   (function () {
     var channel = <%- JSON.stringify(channel) %>;
@@ -397,8 +397,9 @@
         video.addEventListener('error', handlers.error);
         video.src = src;
       } else {
-        setStatus('Your browser does not support HLS playback.');
-        setCaptionsStatus('Captions: unavailable (no HLS support in this browser).');
+        var missing = !window.Hls;
+        setStatus(missing ? 'The video player (hls.js) did not load. Reload the page; if this persists, check the LunaTV server.' : 'Your browser does not support HLS playback.');
+        setCaptionsStatus(missing ? 'Captions: unavailable (video player did not load).' : 'Captions: unavailable (no HLS support in this browser).');
       }
     }
 
