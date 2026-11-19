@@ -47,13 +47,20 @@
     } catch (_) {}
   }
 
+  // Times that fall on another calendar day than today get a weekday prefix.
+  function formatTime(seconds) {
+    var date = new Date(seconds * 1000);
+    var text = date.toLocaleTimeString([], timeOptions);
+    if (date.toDateString() !== new Date().toDateString()) text = date.toLocaleDateString([], { weekday: 'short' }) + ' ' + text;
+    return text;
+  }
+
   function hydrateTimes() {
     document.querySelectorAll('.airing-time').forEach(function (el) {
-      el.textContent = new Date(Number(el.dataset.start) * 1000).toLocaleTimeString([], timeOptions) +
-        ' – ' + new Date(Number(el.dataset.end) * 1000).toLocaleTimeString([], timeOptions);
+      el.textContent = formatTime(Number(el.dataset.start)) + ' – ' + formatTime(Number(el.dataset.end));
     });
     document.querySelectorAll('.airing-start').forEach(function (el) {
-      el.textContent = 'Up next · ' + new Date(Number(el.dataset.start) * 1000).toLocaleTimeString([], timeOptions);
+      el.textContent = 'Up next · ' + formatTime(Number(el.dataset.start));
     });
     updateProgress();
   }

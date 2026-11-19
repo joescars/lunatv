@@ -79,8 +79,16 @@ fi
 
 echo "Uploading to http://$ROKU_IP ..."
 
-response=$(curl -sS --fail-with-body --digest \
-  -u "rokudev:$ROKU_DEV_PASSWORD" \
+# The password goes to curl on stdin as a config file so it never appears in
+# `ps`. The HTTP status is read with -w, which works on any curl (the newer
+# fail-with-body option needs curl >= 7.76 and errors confusingly on older).
+response_file=$(mktemp)
+trap 'rm -rf -- ".roku-package" "$response_file"' EXIT
+curl_user=${ROKU_DEV_PASSWORD//\\/\\\\}
+curl_user=${curl_user//\"/\\\"}
+
+http_code=$(printf 'user = "rokudev:%s"\n' "$curl_user" | curl -sS --digest --config - \
+  -o "$response_file" -w '%{http_code}' \
   -F "mysubmit=Install" \
   -F "archive=@$ZIP_NAME" \
   -F "passwd=" \
@@ -88,9 +96,18 @@ response=$(curl -sS --fail-with-body --digest \
     echo "Upload failed. Check that:" >&2
     echo "  - the Roku at $ROKU_IP is in Developer Mode" >&2
     echo "  - ROKU_DEV_PASSWORD matches the password you set (not your Roku account password)" >&2
-    echo "$response" >&2
+    echo "$http_code" >&2
     exit 1
   }
+
+response=$(cat "$response_file")
+if [[ ! "$http_code" =~ ^2[0-9][0-9]$ ]]; then
+  echo "Upload failed (HTTP $http_code). Check that:" >&2
+  echo "  - the Roku at $ROKU_IP is in Developer Mode" >&2
+  echo "  - ROKU_DEV_PASSWORD matches the password you set (not your Roku account password)" >&2
+  sed -e 's/<[^>]*>//g' <<<"$response" | grep -v '^\s*$' | head -20 >&2
+  exit 1
+fi
 
 # Roku returns an HTML page; pull out the status line it embeds.
 if grep -qi "Identical to previous version" <<<"$response"; then

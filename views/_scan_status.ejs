@@ -1,5 +1,5 @@
 <div id="scan-status"
-     <% if (status && status.ScanInProgress) { %>hx-get="/admin/scan/status" hx-trigger="load delay:2s" hx-swap="outerHTML"<% } %>>
+     <% if (status && status.ScanInProgress) { %>hx-get="/admin/scan/status" hx-trigger="load delay:2s" hx-swap="outerHTML"<% } else if (error) { %>hx-get="/admin/scan/status" hx-trigger="load delay:5s" hx-swap="outerHTML"<% } %>>
   <% if (error) { %>
     <div class="alert alert-danger" role="alert">Could not read scan status: <%= error %></div>
   <% } else if (!status) { %>
