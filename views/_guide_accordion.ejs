@@ -18,7 +18,7 @@
        var next = airings.find(function(a) { return a.StartTime > now; });
        var search = [ch.GuideNumber, ch.GuideName].concat(airings.map(function(a) { return a.Title; })).join(' ');
   %>
-    <section class="guide-channel guide-item" data-favorite="<%= ch.Favorite ? 1 : 0 %>" data-hidden="<%= ch.Hidden ? 1 : 0 %>" data-search="<%= search %>">
+    <section class="guide-channel guide-item" data-channel="<%= ch.GuideNumber %>" data-favorite="<%= ch.Favorite ? 1 : 0 %>" data-hidden="<%= ch.Hidden ? 1 : 0 %>" data-search="<%= search %>">
       <div class="guide-channel-header">
         <span class="guide-channel-num"><%= ch.GuideNumber %></span>
         <% if (current && current.ImageURL) { %><img src="<%= current.ImageURL %>" alt="" class="guide-channel-thumb" loading="lazy"><% } %>

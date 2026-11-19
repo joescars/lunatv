@@ -20,7 +20,38 @@
     return element;
   }
 
-  function render() {
+  function captureFocus() {
+    var active = document.activeElement;
+    if (!active || !container.contains(active)) return null;
+    var row = active.closest('.guide-row');
+    if (!row || !row.dataset.channel) return null;
+    return { channel: row.dataset.channel, cell: active.classList.contains('guide-channel-cell'), start: active.dataset.start };
+  }
+  function restoreFocus(saved) {
+    if (!saved) return;
+    var rows = Array.prototype.slice.call(container.querySelectorAll('.guide-row'));
+    var row = rows.filter(function (item) { return item.dataset.channel === saved.channel; })[0];
+    var target = row && (saved.cell ? row.querySelector('.guide-channel-cell') :
+      Array.prototype.slice.call(row.querySelectorAll('.guide-block')).filter(function (block) { return block.dataset.start === saved.start; })[0]);
+    if (target) target.focus({ preventScroll: true });
+  }
+
+  // Replace the schedule after the tab resumes. The visible time at the left edge,
+  // vertical scroll, focus and active filters survive the re-render.
+  document.addEventListener('lunatv:guide-data', function (event) {
+    var next = event.detail && event.detail.data;
+    if (!next || !next.channels) return;
+    var leftTime = rangeStart + (scroller.scrollLeft / pxPerMinute) * 60;
+    var pageY = window.scrollY;
+    var saved = captureFocus();
+    data = next;
+    rangeStart = data.now - data.now % 1800;
+    render({ leftTime: leftTime });
+    restoreFocus(saved);
+    window.scrollTo(0, pageY);
+  });
+
+  function render(options) {
     var scrollLeft = scroller.scrollLeft;
     var scrollTop = scroller.scrollTop;
     var dataEnd = data.now;
@@ -48,6 +79,7 @@
 
     data.channels.forEach(function (ch) {
       var row = make('div', 'guide-row guide-item');
+      row.dataset.channel = ch.GuideNumber;
       row.dataset.favorite = ch.Favorite ? '1' : '0';
       row.dataset.hidden = ch.Hidden ? '1' : '0';
       row.dataset.search = [ch.GuideNumber, ch.GuideName].concat((ch.Guide || []).map(function (a) { return a.Title; })).join(' ');
@@ -87,6 +119,7 @@
     container.appendChild(nowLine);
     updateNow();
     document.dispatchEvent(new Event('lunatv:guide-rendered'));
+    if (options && options.leftTime) scrollLeft = Math.max(0, minutes(options.leftTime) * pxPerMinute);
     scroller.scrollLeft = firstRender ? Math.max(0, minutes(data.now) * pxPerMinute - 60) : scrollLeft;
     scroller.scrollTop = scrollTop;
     firstRender = false;
@@ -102,4 +135,6 @@
   render();
   window.addEventListener('resize', function () { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 200); });
   setInterval(updateNow, 30000);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') updateNow(); });
+  window.addEventListener('pageshow', function (event) { if (event.persisted) updateNow(); });
 })();
