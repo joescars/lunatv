@@ -113,6 +113,69 @@ try {
     assert.equal(await page.locator('#watch-overlay').evaluate(el => el.open), true);
     await page.locator('#watch-overlay-close').click();
   });
+  await check('Resumed guide list and grid refresh only when stale and keep state', async () => {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+    await ctx.addInitScript(() => {
+      const real = Date.now.bind(Date);
+      window.__skewMs = 0;
+      Date.now = () => real() + window.__skewMs;
+    });
+    const guidePage = await ctx.newPage();
+    const errors = [];
+    guidePage.on('pageerror', error => errors.push(error.message));
+    let fetches = [];
+    guidePage.on('request', request => { const p = new URL(request.url()).pathname; if (p === '/guide/fragment' || p === '/guide/grid') fetches.push(p); });
+    const resume = (skewMinutes, persisted) => guidePage.evaluate(([minutes, restored]) => {
+      window.__skewMs = minutes * 60000;
+      if (restored) window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+      else document.dispatchEvent(new Event('visibilitychange'));
+    }, [skewMinutes, persisted]);
+    try {
+      await guidePage.goto(origin + '/guide');
+      await guidePage.waitForSelector('.guide-item');
+      await guidePage.locator('.guide-channel-info').first().click();
+      await guidePage.waitForSelector('#guide-0.show');
+      await guidePage.locator('.guide-channel-info').nth(2).focus();
+      await guidePage.evaluate(() => { window.scrollTo(0, 120); document.querySelector('.guide-channel').dataset.stale = '1'; });
+      const before = await guidePage.evaluate(() => window.scrollY);
+      fetches = [];
+      await resume(4, false);
+      await guidePage.waitForTimeout(300);
+      assert.deepEqual(fetches, [], 'fresh data must not refetch');
+      await resume(6, false);
+      await guidePage.waitForFunction(() => !document.querySelector('[data-stale]'));
+      assert.deepEqual(fetches, ['/guide/fragment']);
+      assert.equal(await guidePage.locator('#guide-0.show').count(), 1);
+      assert.equal(await guidePage.locator('[data-bs-target="#guide-0"]').first().getAttribute('aria-expanded'), 'true', 'expanded toggle state restored');
+      assert.equal(await guidePage.evaluate(() => document.activeElement === document.querySelectorAll('.guide-channel-info')[2]), true, 'list focus restored');
+      assert.equal(await guidePage.evaluate(() => window.scrollY), before);
+      assert.ok(await guidePage.locator('.airing-time').first().textContent(), 'times are re-hydrated');
+      await resume(6, true);
+      await resume(6, false);
+      await guidePage.waitForTimeout(300);
+      assert.equal(fetches.length, 1, 'a refresh resets staleness; no refetch storm');
+
+      fetches = [];
+      await guidePage.goto(origin + '/guide/grid');
+      await guidePage.waitForSelector('.guide-row');
+      await guidePage.locator('#guide-search').fill('PBS');
+      await guidePage.locator('.guide-item:not([hidden]) .guide-block').nth(1).focus();
+      const focused = await guidePage.evaluate(() => { const el = document.activeElement; document.querySelector('.guide-row').dataset.stale = '1'; return el.dataset.start; });
+      fetches = [];
+      await resume(4, true);
+      await guidePage.waitForTimeout(300);
+      assert.deepEqual(fetches, [], 'fresh grid must not refetch');
+      await resume(6, true);
+      await guidePage.waitForFunction(() => !document.querySelector('[data-stale]'));
+      assert.deepEqual(fetches, ['/guide/grid']);
+      assert.equal(await guidePage.evaluate(start => document.activeElement.classList.contains('guide-block') && document.activeElement.dataset.start === start, focused), true, 'grid focus restored');
+      assert.equal(await guidePage.locator('.guide-item:visible').count(), 1, 'filters are reapplied');
+      await resume(6, false);
+      await guidePage.waitForTimeout(300);
+      assert.equal(fetches.length, 1);
+      assert.deepEqual(errors, []);
+    } finally { await ctx.close(); }
+  });
   await check('Embedded playback status bar auto-hides after playback starts', async () => {
     await goto('/watch/2.1?embedded=1');
     const statusOverlay = page.locator('.watch-fullbleed-overlay');
