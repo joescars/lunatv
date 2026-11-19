@@ -110,6 +110,14 @@ docker compose up -d
 
 The app listens on port `8080` by default — visit `http://<docker-host>:8080`. To use a fixed release, change the image tag from `latest` to a version such as `v1.2.3`.
 
+To build and run your local checkout instead of the published image, layer the development override on top (the Dockerfile is `amd64`-only; on ARM use `npm start` instead):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+```
+
+The override builds from the `Dockerfile` and tags the result `lunatv:dev`, so it does not replace the pulled `ghcr.io/joescars/lunatv:latest` image. Plain `docker compose up -d` always runs the published image.
+
 ### Configuration
 
 The `.env` values above configure the app. `HDHOMERUN_HOST` is required; use the tuner's LAN IP because containers on the default Docker bridge network cannot resolve mDNS `.local` names.

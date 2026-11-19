@@ -113,6 +113,69 @@ try {
     assert.equal(await page.locator('#watch-overlay').evaluate(el => el.open), true);
     await page.locator('#watch-overlay-close').click();
   });
+  await check('Resumed guide list and grid refresh only when stale and keep state', async () => {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+    await ctx.addInitScript(() => {
+      const real = Date.now.bind(Date);
+      window.__skewMs = 0;
+      Date.now = () => real() + window.__skewMs;
+    });
+    const guidePage = await ctx.newPage();
+    const errors = [];
+    guidePage.on('pageerror', error => errors.push(error.message));
+    let fetches = [];
+    guidePage.on('request', request => { const p = new URL(request.url()).pathname; if (p === '/guide/fragment' || p === '/guide/grid') fetches.push(p); });
+    const resume = (skewMinutes, persisted) => guidePage.evaluate(([minutes, restored]) => {
+      window.__skewMs = minutes * 60000;
+      if (restored) window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+      else document.dispatchEvent(new Event('visibilitychange'));
+    }, [skewMinutes, persisted]);
+    try {
+      await guidePage.goto(origin + '/guide');
+      await guidePage.waitForSelector('.guide-item');
+      await guidePage.locator('.guide-channel-info').first().click();
+      await guidePage.waitForSelector('#guide-0.show');
+      await guidePage.locator('.guide-channel-info').nth(2).focus();
+      await guidePage.evaluate(() => { window.scrollTo(0, 120); document.querySelector('.guide-channel').dataset.stale = '1'; });
+      const before = await guidePage.evaluate(() => window.scrollY);
+      fetches = [];
+      await resume(4, false);
+      await guidePage.waitForTimeout(300);
+      assert.deepEqual(fetches, [], 'fresh data must not refetch');
+      await resume(6, false);
+      await guidePage.waitForFunction(() => !document.querySelector('[data-stale]'));
+      assert.deepEqual(fetches, ['/guide/fragment']);
+      assert.equal(await guidePage.locator('#guide-0.show').count(), 1);
+      assert.equal(await guidePage.locator('[data-bs-target="#guide-0"]').first().getAttribute('aria-expanded'), 'true', 'expanded toggle state restored');
+      assert.equal(await guidePage.evaluate(() => document.activeElement === document.querySelectorAll('.guide-channel-info')[2]), true, 'list focus restored');
+      assert.equal(await guidePage.evaluate(() => window.scrollY), before);
+      assert.ok(await guidePage.locator('.airing-time').first().textContent(), 'times are re-hydrated');
+      await resume(6, true);
+      await resume(6, false);
+      await guidePage.waitForTimeout(300);
+      assert.equal(fetches.length, 1, 'a refresh resets staleness; no refetch storm');
+
+      fetches = [];
+      await guidePage.goto(origin + '/guide/grid');
+      await guidePage.waitForSelector('.guide-row');
+      await guidePage.locator('#guide-search').fill('PBS');
+      await guidePage.locator('.guide-item:not([hidden]) .guide-block').nth(1).focus();
+      const focused = await guidePage.evaluate(() => { const el = document.activeElement; document.querySelector('.guide-row').dataset.stale = '1'; return el.dataset.start; });
+      fetches = [];
+      await resume(4, true);
+      await guidePage.waitForTimeout(300);
+      assert.deepEqual(fetches, [], 'fresh grid must not refetch');
+      await resume(6, true);
+      await guidePage.waitForFunction(() => !document.querySelector('[data-stale]'));
+      assert.deepEqual(fetches, ['/guide/grid']);
+      assert.equal(await guidePage.evaluate(start => document.activeElement.classList.contains('guide-block') && document.activeElement.dataset.start === start, focused), true, 'grid focus restored');
+      assert.equal(await guidePage.locator('.guide-item:visible').count(), 1, 'filters are reapplied');
+      await resume(6, false);
+      await guidePage.waitForTimeout(300);
+      assert.equal(fetches.length, 1);
+      assert.deepEqual(errors, []);
+    } finally { await ctx.close(); }
+  });
   await check('Embedded playback status bar auto-hides after playback starts', async () => {
     await goto('/watch/2.1?embedded=1');
     const statusOverlay = page.locator('.watch-fullbleed-overlay');
@@ -125,6 +188,121 @@ try {
     }, null, { timeout: 4000 });
     assert.equal(await statusOverlay.isVisible(), false);
     await page.screenshot({ path: path.join(screenshots, 'embedded-watch-overlay-hidden.png') });
+  });
+  // Player recovery: synthetic stream endpoints and a stub hls.js; no tuner or video is involved.
+  const hlsStub = `window.Hls = class {
+    static isSupported() { return true; }
+    constructor() { this.h = {}; this.calls = []; (window.__hls = window.__hls || []).push(this); }
+    loadSource() { this.calls.push('loadSource'); }
+    attachMedia() {}
+    on(name, fn) { (this.h[name] = this.h[name] || []).push(fn); }
+    startLoad() { this.calls.push('startLoad'); }
+    recoverMediaError() { this.calls.push('recoverMediaError'); }
+    destroy() { this.destroyed = true; }
+    emit(name, data) { (this.h[name] || []).forEach(fn => fn(name, data)); }
+  };
+  Hls.Events = { MANIFEST_PARSED: 'm', FRAG_BUFFERED: 'f', ERROR: 'e' };
+  Hls.ErrorTypes = { NETWORK_ERROR: 'networkError', MEDIA_ERROR: 'mediaError' };`;
+  async function playerPage({ hls = true } = {}) {
+    const p = await context.newPage();
+    const errors = [];
+    p.on('pageerror', error => errors.push(error.message));
+    const requests = [];
+    await p.route('**/hls.min.js*', route => route.fulfill({ contentType: 'text/javascript', body: hls ? hlsStub : '' }));
+    await p.route(/\/(stream|recordings)\/.*\/(start|ready|heartbeat|stop)$/, route => {
+      const request = route.request();
+      const name = new URL(request.url()).pathname.split('/').pop();
+      requests.push(name);
+      route.fulfill({ status: name === 'start' ? 202 : name === 'ready' ? 200 : 204, contentType: 'application/json', body: name === 'ready' ? '{"ready":true}' : '' });
+    });
+    if (!hls) await p.route('**/stream.m3u8', () => {});
+    if (!hls) await p.addInitScript(() => { HTMLMediaElement.prototype.canPlayType = () => 'maybe'; });
+    return { p, errors, requests, count: name => requests.filter(r => r === name).length };
+  }
+  const hlsFatal = (p, index, type, details = 'synthetic') => p.evaluate(([i, t, d]) => window.__hls[i].emit('e', { fatal: true, type: t, details: d }), [index, type, details]);
+  for (const [name, route] of [['live', '/watch/2.1'], ['recording', '/recordings/abcdef/watch']]) {
+    await check(`Player (${name}) restarts through start/ready after a bfcache restore`, async () => {
+      const t = await playerPage();
+      try {
+        await t.p.goto(origin + route);
+        await t.p.waitForFunction(() => window.__hls && window.__hls.length === 1);
+        assert.equal(t.count('start'), 1);
+        await t.p.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })));
+        assert.equal(await t.p.evaluate(() => window.__hls[0].destroyed), true, 'pagehide should release hls.js');
+        if (name === 'recording') assert.equal(t.count('stop'), 1, 'recording pagehide keeps its stop request');
+        await t.p.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false })));
+        assert.equal(t.count('start'), 1, 'non-bfcache pageshow must not restart');
+        await t.p.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+        await t.p.waitForFunction(() => window.__hls.length === 2);
+        assert.equal(t.count('start'), 2, 'restore must re-run POST start before loading the playlist');
+        assert.ok(t.count('ready') >= 2, 'restore must poll /ready again');
+        assert.deepEqual(await t.p.evaluate(() => window.__hls.map(h => h.destroyed || false)), [true, false]);
+        assert.deepEqual(t.errors, []);
+      } finally { await t.p.close(); }
+    });
+    await check(`Player (${name}) bounds hls.js fatal recovery, then stops and offers Retry`, async () => {
+      const t = await playerPage();
+      try {
+        await t.p.goto(origin + route);
+        await t.p.waitForFunction(() => window.__hls && window.__hls.length === 1);
+        await t.p.evaluate(() => window.__hls[0].emit('m'));
+        for (let i = 0; i < 3; i++) await hlsFatal(t.p, 0, 'networkError', 'fragLoadError');
+        for (let i = 0; i < 3; i++) await hlsFatal(t.p, 0, 'mediaError', 'bufferStalled');
+        assert.deepEqual(await t.p.evaluate(() => window.__hls[0].calls), ['loadSource', 'startLoad', 'startLoad', 'startLoad', 'recoverMediaError', 'recoverMediaError', 'recoverMediaError']);
+        assert.equal(await t.p.locator('#player-retry').isVisible(), false, 'recoverable errors should not show Retry');
+        assert.equal(await t.p.evaluate(() => window.__hls[0].destroyed || false), false);
+        await hlsFatal(t.p, 0, 'mediaError', 'bufferStalled');
+        assert.equal(await t.p.evaluate(() => window.__hls[0].destroyed), true);
+        await t.p.locator('#player-retry').waitFor({ state: 'visible' });
+        assert.match(await t.p.locator('#player-status').textContent(), /Playback failed: bufferStalled/);
+        assert.equal(t.count('stop'), 1, 'terminal failure must release the session');
+        await t.p.locator('#player-retry').click();
+        await t.p.waitForFunction(() => window.__hls.length === 2);
+        assert.equal(t.count('start'), 2, 'Retry must re-run the start handshake');
+        assert.equal(await t.p.locator('#player-retry').isVisible(), false);
+        assert.deepEqual(t.errors, []);
+      } finally { await t.p.close(); }
+    });
+    await check(`Player (${name}) handles native HLS video errors with bounded retries`, async () => {
+      const t = await playerPage({ hls: false });
+      try {
+        await t.p.goto(origin + route);
+        await t.p.waitForFunction(() => document.getElementById('player').getAttribute('src'));
+        for (let i = 0; i < 3; i++) await t.p.locator('#player').evaluate(v => v.dispatchEvent(new Event('error')));
+        assert.equal(await t.p.locator('#player-retry').isVisible(), false);
+        await t.p.locator('#player').evaluate(v => v.dispatchEvent(new Event('error')));
+        await t.p.locator('#player-retry').waitFor({ state: 'visible' });
+        assert.equal(await t.p.locator('#player').getAttribute('src'), null);
+        assert.equal(t.count('stop'), 1);
+        assert.deepEqual(t.errors, []);
+      } finally { await t.p.close(); }
+    });
+  }
+  await check('Live player stops heartbeats after pagehide and terminal failure', async () => {
+    const t = await playerPage();
+    try {
+      await t.p.clock.install();
+      await t.p.goto(origin + '/watch/2.1');
+      await t.p.waitForFunction(() => window.__hls && window.__hls.length === 1);
+      await t.p.evaluate(() => window.__hls[0].emit('m'));
+      await t.p.clock.runFor(9000);
+      await t.p.waitForTimeout(300);
+      const running = t.count('heartbeat');
+      assert.ok(running >= 3, `heartbeat should be running (saw ${running})`);
+      await hlsFatal(t.p, 0, 'otherError');
+      const before = t.count('heartbeat');
+      await t.p.clock.runFor(12000);
+      await t.p.waitForTimeout(300);
+      assert.equal(t.count('heartbeat'), before, 'heartbeat must stop after terminal failure');
+      await t.p.locator('#player-retry').click();
+      await t.p.waitForFunction(() => window.__hls.length === 2);
+      await t.p.evaluate(() => window.__hls[1].emit('m'));
+      await t.p.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })));
+      const afterHide = t.count('heartbeat');
+      await t.p.clock.runFor(12000);
+      await t.p.waitForTimeout(300);
+      assert.equal(t.count('heartbeat'), afterHide, 'heartbeat must stop on pagehide');
+    } finally { await t.p.close(); }
   });
   await check('Theme preference survives viewer/admin navigation', async () => {
     await goto('/guide');
@@ -139,6 +317,32 @@ try {
     const row = page.locator('#channel-3-1');
     await row.locator('button').first().click();
     await page.waitForFunction(() => document.querySelector('#channel-3-1 button').getAttribute('aria-pressed') === 'true');
+  });
+  await check('Channel filters are re-applied after Hide/Unfavorite row swaps', async () => {
+    await goto('/admin/channels');
+    const count = () => page.locator('#channel-count').textContent();
+    const visibleRows = () => page.locator('.channel-row:visible').count();
+    // Hide with Show Hidden off: the row must disappear and the count must follow.
+    const before = await visibleRows();
+    await page.locator('#channel-4-1 button[title="Hide"]').click();
+    await page.locator('#channel-4-1').waitFor({ state: 'hidden' });
+    assert.equal(await visibleRows(), before - 1);
+    assert.equal(await count(), `${before - 1} channels`);
+    // Unfavorite under the Favorites filter: the row must leave the filtered list.
+    await page.locator('label[for="filter-favorites"]').click();
+    const favorites = await visibleRows();
+    assert.ok(favorites >= 2, 'fixture should have favorites');
+    await page.locator('#channel-2-1 button[title="Unfavorite"]').click();
+    await page.locator('#channel-2-1').waitFor({ state: 'hidden' });
+    assert.equal(await visibleRows(), favorites - 1);
+    assert.equal(await count(), `${favorites - 1} channel${favorites - 1 === 1 ? '' : 's'}`);
+    // Restore shared fixture state: unhide the row and re-favorite the first channel.
+    await page.locator('label[for="filter-favorites"]').click();
+    await page.locator('label[for="filter-hidden"]').click();
+    await page.locator('#channel-4-1 button[title="Unhide"]').click();
+    await page.waitForFunction(() => document.querySelector('#channel-4-1 button[title="Hide"]'));
+    await page.locator('#channel-2-1 button[title="Favorite"]').click();
+    await page.waitForFunction(() => document.querySelector('#channel-2-1 button[title="Unfavorite"]'));
   });
   await check('Scan source, start, progress and abort', async () => {
     await goto('/admin/scan');

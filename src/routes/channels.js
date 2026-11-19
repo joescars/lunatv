@@ -2,6 +2,9 @@ const express = require('express');
 const hdhr = require('../hdhomerun');
 
 const router = express.Router();
+const GUIDE_NUMBER_RE = /^[0-9]+(?:\.[0-9]+)?$/;
+// Mutually exclusive device flags: favorite, hide-from-guide (unfavorite/show), skip.
+const FLAG_MODES = new Set(['+', '-', 'x']);
 const CHANNEL_BATCH_SIZE = Math.max(20, Number(process.env.CHANNEL_BATCH_SIZE || 80) || 80);
 
 function parsePositiveInt(value, fallback) {
@@ -53,6 +56,12 @@ router.get('/channels/rows', async (req, res) => {
 
 router.post('/channels/flag', async (req, res) => {
   const { guide, mode } = req.query;
+  if (typeof guide !== 'string' || !GUIDE_NUMBER_RE.test(guide)) {
+    return res.status(400).send('Invalid channel number');
+  }
+  if (typeof mode !== 'string' || !FLAG_MODES.has(mode)) {
+    return res.status(400).send('Invalid mode');
+  }
   try {
     await hdhr.setChannelFlag(guide, mode);
     const channels = await hdhr.getLineup();

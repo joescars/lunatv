@@ -3,7 +3,7 @@
 ## Commands
 
 - Install/run locally: `npm ci && HDHOMERUN_HOST=<device-ip> npm start`. Node does not load `.env` itself; pass env vars explicitly.
-- Run the production-like stack: `docker compose up -d --build`.
+- Run the published image (deployment): `docker compose up -d` (pulls `ghcr.io/joescars/lunatv:latest`; `--build` builds nothing there). Run local code in Docker: `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build`.
 - Browser/accessibility checks: `npm run test:ui` after `npx playwright install chromium`, or `CHROME_PATH=/usr/bin/google-chrome npm run test:ui`. The suite uses synthetic device data and never tunes a real device. Live playback still needs manual verification with QSV-capable `ffmpeg` (the container provides Jellyfin ffmpeg and maps `/dev/dri`).
 - Rebuild committed Material Web/Roboto assets after dependency or entry changes: `npm run build:ui`. Runtime and Docker do not require a frontend build. There are no lint, typecheck, or formatter scripts.
 - Docker reads `.env`; use LAN IPs for `HDHOMERUN_HOST` and `RECORD_ENGINE_HOST`, never `localhost` or `hdhomerun.local` from inside the container.

@@ -49,7 +49,9 @@ router.post('/api/channels/:guideNumber/favorite', async (req, res) => {
   try {
     await hdhr.setChannelFlag(guideNumber, favorite ? '+' : '-');
     cache.clear('guide:duration:4');
-    cache.clear(`guide:roku:duration:4:${Math.floor(Date.now() / 1800) * 1800}`);
+    // Slim guide keys end in a 30-minute slot start (epoch seconds); clear by
+    // prefix so no slot is missed.
+    cache.clearPrefix('guide:roku:duration:4:');
     res.json({ guideNumber, favorite: Boolean(favorite) });
   } catch (err) {
     res.status(502).json({ error: err.message });

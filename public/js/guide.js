@@ -13,6 +13,12 @@
   var scrollPosition = 0;
   var previousOverflow = '';
   var timeOptions = { hour: 'numeric', minute: '2-digit' };
+  var STALE_MS = 5 * 60 * 1000;
+  var RETRY_MS = 30 * 1000;
+  var isGrid = !!document.getElementById('guide-data');
+  var loadedAt = Date.now();
+  var attemptedAt = 0;
+  var refreshing = false;
 
   try {
     favorites.checked = localStorage.getItem('guide-favorites') === '1';
@@ -110,6 +116,7 @@
     document.body.style.overflow = previousOverflow;
     window.scrollTo(0, scrollPosition);
     if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true });
+    refreshIfStale();
   }
   function closeOverlay() {
     if (!overlay.open) return;
@@ -142,7 +149,7 @@
   });
 
   document.body.addEventListener('htmx:afterSwap', function (event) {
-    if (event.target && event.target.id === 'guide-content') { hydrateTimes(); applyFilters(); }
+    if (event.target && event.target.id === 'guide-content') { loadedAt = Date.now(); hydrateTimes(); applyFilters(); }
   });
   document.addEventListener('lunatv:guide-rendered', function () { hydrateTimes(); applyFilters(); });
   ['htmx:sendError', 'htmx:responseError'].forEach(function (name) {
@@ -153,6 +160,86 @@
       applyFilters();
     });
   });
+  // Resume handling: the list/grid are rendered once, so a tab or bfcache page
+  // restored after a long absence still shows old programs as On Now. Refetch
+  // through the existing fragment/grid routes when the data is older than
+  // STALE_MS, keeping expanded rows, focus and scroll. No timers are added.
+  function focusables(section) {
+    return Array.prototype.slice.call(section.querySelectorAll('button, a[href], md-filled-button'));
+  }
+  function captureListState() {
+    var state = { scrollY: window.scrollY, expanded: [], focus: null };
+    content.querySelectorAll('.guide-channel').forEach(function (section) {
+      var body = section.querySelector('.collapse.show');
+      if (body && section.dataset.channel) state.expanded.push(section.dataset.channel);
+    });
+    var active = document.activeElement;
+    var owner = active && active !== document.body && active.closest && active.closest('.guide-channel');
+    if (owner && content.contains(owner)) state.focus = { channel: owner.dataset.channel, index: focusables(owner).indexOf(active) };
+    return state;
+  }
+  function restoreListState(state) {
+    content.querySelectorAll('.guide-channel').forEach(function (section) {
+      if (state.expanded.indexOf(section.dataset.channel) === -1) return;
+      var body = section.querySelector('.collapse');
+      if (body) body.classList.add('show');
+      section.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (toggle) { toggle.setAttribute('aria-expanded', 'true'); });
+    });
+    if (state.focus) {
+      var sections = Array.prototype.slice.call(content.querySelectorAll('.guide-channel'));
+      var section = sections.filter(function (item) { return item.dataset.channel === state.focus.channel; })[0];
+      var target = section && focusables(section)[state.focus.index];
+      if (target && !target.closest('[hidden]')) target.focus({ preventScroll: true });
+    }
+    window.scrollTo(0, state.scrollY);
+  }
+
+  function finishRefresh(ok) {
+    refreshing = false;
+    if (ok) loadedAt = Date.now();
+  }
+  function refreshList() {
+    return fetch('/guide/fragment', { headers: { 'HX-Request': 'true' } }).then(function (response) {
+      if (!response.ok) throw new Error('Guide refresh failed');
+      return response.text();
+    }).then(function (html) {
+      var template = document.createElement('template');
+      template.innerHTML = html;
+      // Keep the last good guide when the refresh itself comes back as an error/empty state.
+      if (!template.content.querySelector('.guide-item') && content.querySelector('.guide-item')) return false;
+      var state = captureListState();
+      content.innerHTML = html;
+      if (window.htmx) window.htmx.process(content);
+      hydrateTimes();
+      applyFilters();
+      restoreListState(state);
+      return true;
+    });
+  }
+  function refreshGrid() {
+    if (!document.getElementById('guide-inner')) { window.location.reload(); return Promise.resolve(false); }
+    return fetch('/guide/grid').then(function (response) {
+      if (!response.ok) throw new Error('Guide refresh failed');
+      return response.text();
+    }).then(function (html) {
+      var doc = new DOMParser().parseFromString(html, 'text/html');
+      var json = doc.getElementById('guide-data');
+      var data = json && JSON.parse(json.textContent);
+      if (!data || !data.channels || !data.channels.length) return false;
+      document.dispatchEvent(new CustomEvent('lunatv:guide-data', { detail: { data: data } }));
+      return true;
+    });
+  }
+  function refreshIfStale() {
+    if (document.visibilityState === 'hidden' || refreshing || (overlay && overlay.open) || !content) return;
+    var now = Date.now();
+    if (now - loadedAt < STALE_MS || now - attemptedAt < RETRY_MS) { updateProgress(); return; }
+    refreshing = true;
+    attemptedAt = now;
+    (isGrid ? refreshGrid() : refreshList()).then(finishRefresh, function () { finishRefresh(false); });
+  }
+  document.addEventListener('visibilitychange', refreshIfStale);
+  window.addEventListener('pageshow', function (event) { if (event.persisted) refreshIfStale(); });
   hydrateTimes();
   applyFilters();
   setInterval(updateProgress, 30000);
