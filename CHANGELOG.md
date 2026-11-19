@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+### Fixed: remaining server/Docker hardening from #36
+
+- The container now runs the app as the unprivileged `node` user. A small
+  entrypoint reads the group IDs of the mounted `/dev/dri` nodes and drops to
+  `node` with exactly those groups, so QSV works without configuring host
+  render/video GIDs. Image remains `linux/amd64` Jellyfin ffmpeg7.
+- Added a Dockerfile `HEALTHCHECK` against `/stream/metrics` (in-process only;
+  a tuner outage does not mark the container unhealthy).
+- `STREAM_DECODE_MODE=qsv` no longer forces `mpeg2_qsv`; `-hwaccel qsv` selects
+  the matching QSV decoder, so H.264/HEVC channels decode too.
+- Stream `/stats` no longer returns raw WebVTT-sidecar/ffprobe stderr, the VTT
+  file path, or tuner error text. It keeps `reason`, a sanitized `lastError`
+  and a `stderrLines` count; raw detail is logged server-side.
+
 ### Fixed: one viewer stopping no longer kills a shared stream (#32)
 
 - Browser start/heartbeat/stop now carry a per-tab `?viewer=<id>` (random, 8-64
