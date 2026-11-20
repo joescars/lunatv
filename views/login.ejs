@@ -1,0 +1,25 @@
+<%- include('_client_header', { title: 'Sign in' }) %>
+
+<div class="page-heading"><div><h1>Sign in</h1><p class="page-description">Sign in to manage recordings, favorites and device settings.</p></div></div>
+
+<% if (!configured) { %>
+  <div class="alert alert-warning" role="alert">No users are configured on this server yet. Create one with <code>node scripts/auth-setup.js</code> and set <code>AUTH_ADMIN_PASSWORD_HASH</code> (see docs/authentication.md).</div>
+<% } %>
+<% if (error) { %>
+  <div class="alert alert-danger" role="alert"><%= error %></div>
+<% } %>
+
+<form method="post" action="/login" class="d-grid gap-3" style="max-width: 24rem;">
+  <input type="hidden" name="next" value="<%= next %>">
+  <div>
+    <label for="login-username" class="form-label">Username</label>
+    <input id="login-username" name="username" class="form-control" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus>
+  </div>
+  <div>
+    <label for="login-password" class="form-label">Password</label>
+    <input id="login-password" name="password" type="password" class="form-control" autocomplete="current-password" required>
+  </div>
+  <button type="submit" class="btn btn-primary">Sign in</button>
+</form>
+
+<%- include('_footer') %>

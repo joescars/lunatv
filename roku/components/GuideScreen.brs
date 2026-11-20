@@ -574,6 +574,7 @@ sub onPreviewStreamResult(event as object)
     content = CreateObject("roSGNode", "ContentNode")
     content.url = url
     content.streamFormat = "hls"
+    applyAuthHeader(content)
     content.live = true
 
     m.previewVideo.content = content
@@ -658,4 +659,11 @@ sub jumpGuideBy(delta as integer)
     m.guideGrid.jumpToItem = index
     updateFocusedDetails(index)
     updatePreviewThumbnail(index)
+end sub
+
+' Playlist/segment requests made by the Video node bypass Net.brs, so the
+' optional API token must be set on the content itself.
+sub applyAuthHeader(content as object)
+    token = GetPackagedApiToken()
+    if token <> "" then content.HttpHeaders = ["Authorization: Bearer " + token]
 end sub

@@ -15,6 +15,16 @@ sub Net_ConfigureTls(xfer as object, url as string)
     xfer.InitClientCertificates()
 end sub
 
+' Sends the optional LunaTV API token (see roku/README.md, HDHOMERUN_API_TOKEN)
+' as a bearer credential. Servers with AUTH_PUBLIC_LIVE=1 (the default) serve
+' guide/stream playback without it; recordings and mutations (favorite, record,
+' delete) need a token whose role allows them. Empty token = send nothing, so
+' unauthenticated deployments are unchanged.
+sub Net_ConfigureAuth(xfer as object)
+    token = GetPackagedApiToken()
+    if token <> "" then xfer.AddHeader("Authorization", "Bearer " + token)
+end sub
+
 ' Performs a GET request with a timeout.
 ' Returns an associative array: { success: boolean, code: integer, body: string, error: string }
 function Net_HttpGet(url as string, timeoutMs as integer) as object
@@ -23,6 +33,7 @@ function Net_HttpGet(url as string, timeoutMs as integer) as object
     xfer.SetMessagePort(port)
     xfer.SetUrl(url)
     Net_ConfigureTls(xfer, url)
+    Net_ConfigureAuth(xfer)
     xfer.SetRequest("GET")
     xfer.EnableEncodings(true)
     xfer.RetainBodyOnError(true)
@@ -59,6 +70,7 @@ function Net_HttpPost(url as string, timeoutMs as integer) as object
     xfer.SetMessagePort(port)
     xfer.SetUrl(url)
     Net_ConfigureTls(xfer, url)
+    Net_ConfigureAuth(xfer)
     xfer.EnableEncodings(true)
     xfer.RetainBodyOnError(true)
     xfer.AddHeader("Content-Length", "0")
