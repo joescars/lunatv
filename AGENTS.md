@@ -3,9 +3,10 @@
 ## Commands
 
 - Install/run locally: `npm ci && HDHOMERUN_HOST=<device-ip> npm start`. Node does not load `.env` itself; pass env vars explicitly.
-- Run the published image (deployment): `docker compose up -d` (pulls `ghcr.io/joescars/lunatv:latest`; `--build` builds nothing there). Run local code in Docker: `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build`.
+- Run the published image (deployment): `docker compose up -d` (runs the image pinned by `@sha256:` digest in `docker-compose.yml`, never `latest`; `--build` builds nothing there; bump the digest deliberately, see README "Updating the pinned image"). Run local code in Docker: `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build`.
 - Browser/accessibility checks: `npm run test:ui` after `npx playwright install chromium`, or `CHROME_PATH=/usr/bin/google-chrome npm run test:ui`. The suite uses synthetic device data and never tunes a real device. Live playback still needs manual verification with QSV-capable `ffmpeg` (the container provides Jellyfin ffmpeg and maps `/dev/dri`).
 - Rebuild committed Material Web/Roboto assets after dependency or entry changes: `npm run build:ui`. Runtime and Docker do not require a frontend build. There are no lint, typecheck, or formatter scripts.
+- Compose publishes 8080 on `${LUNATV_BIND_ADDRESS:-127.0.0.1}` only; Roku/LAN access requires setting it to a trusted interface IP (README "Network exposure").
 - Docker reads `.env`; use LAN IPs for `HDHOMERUN_HOST` and `RECORD_ENGINE_HOST`, never `localhost` or `hdhomerun.local` from inside the container.
 - Trust `docker-compose.yml` over README defaults: Compose currently sets `STREAM_DECODE_MODE=sw` and `WEBVTT_SIDECAR_MODE=off`.
 - The Dockerfile configures Jellyfin's repository as `amd64`; native ARM builds fail at `jellyfin-ffmpeg7`. Run the Node app locally for non-playback UI work on ARM rather than changing deployment architecture incidentally.

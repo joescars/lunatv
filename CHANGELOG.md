@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+### Fixed: deployment Compose pins image digest and binds loopback (#59)
+
+- `docker-compose.yml` now references `ghcr.io/joescars/lunatv@sha256:…`
+  (verified against the registry: same digest as `latest` and `sha-<commit>`,
+  revision label `bd5caa2`) instead of the mutable `latest` tag with
+  `pull_policy: always`.
+- Port 8080 is published on `${LUNATV_BIND_ADDRESS:-127.0.0.1}` instead of all
+  interfaces. **Upgrade note:** Roku/LAN clients must set `LUNATV_BIND_ADDRESS`
+  to the host's trusted LAN IP in `.env`.
+- README documents the exposure model and how to update the pinned digest.
+
 ### Fixed: remaining server/Docker hardening from #36
 
 - The container now runs the app as the unprivileged `node` user. A small

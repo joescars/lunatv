@@ -15,11 +15,12 @@ See [`roku/README.md`](roku/README.md) for Roku setup and sideloading.
 
 ## Docker Compose
 
-The default Compose file pulls the published image. Create `.env` beside it:
+The default Compose file runs the published image, pinned to an immutable digest (`ghcr.io/joescars/lunatv@sha256:…`) rather than the mutable `latest` tag, so a restart never silently pulls different code. Create `.env` beside it:
 
 ```dotenv
 HDHOMERUN_HOST=192.168.1.100
 HDHOMERUN_PORT=80
+LUNATV_BIND_ADDRESS=127.0.0.1
 STREAM_DECODE_MODE=sw
 WEBVTT_SIDECAR_MODE=off
 SOURCE_CAPTION_PROBE=off
@@ -33,7 +34,7 @@ Use LAN IP addresses for `HDHOMERUN_HOST` and `RECORD_ENGINE_HOST`; do not use `
 docker compose up -d
 ```
 
-Open `http://<docker-host>:8080`. The container maps `/dev/dri` for Intel QSV and drops the application process to a non-root user while retaining the GPU device groups. The image is amd64-only because of the Jellyfin ffmpeg dependency; use local Node development on ARM.
+Open `http://127.0.0.1:8080` on the Docker host (see [Network exposure](#network-exposure) to reach it from other devices). The container maps `/dev/dri` for Intel QSV and drops the application process to a non-root user while retaining the GPU device groups. The image is amd64-only because of the Jellyfin ffmpeg dependency; use local Node development on ARM.
 
 To run the local checkout instead of the published image:
 
@@ -41,7 +42,27 @@ To run the local checkout instead of the published image:
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ```
 
-The override builds `lunatv:dev`; plain `docker compose up -d` always pulls `ghcr.io/joescars/lunatv:latest`.
+The override builds `lunatv:dev` and keeps the same port binding; plain `docker compose up -d` only runs the digest-pinned published image.
+
+### Network exposure
+
+Compose publishes port 8080 on `127.0.0.1` by default (`LUNATV_BIND_ADDRESS`). The admin pages and mutation routes (channel changes, scans, recording rules) should be treated as trusted-network-only unless authentication is enabled for your version; do not expose the port to the internet or an untrusted network.
+
+- **Same machine only (default):** leave `LUNATV_BIND_ADDRESS=127.0.0.1`.
+- **Roku or other LAN devices:** set `LUNATV_BIND_ADDRESS` to the Docker host's trusted LAN IP (for example `192.168.1.50`) and point the Roku `HDHOMERUN_WEB_URL` at `http://<that-ip>:8080`. Use `0.0.0.0` only behind a firewall that limits who can reach the port.
+- **Remote access:** put an authenticated reverse proxy or VPN in front and keep the bind address on loopback or a private interface.
+
+Docker's published ports bypass some host firewall rules (`ufw`), so binding to a specific address is more reliable than a firewall rule alone.
+
+### Updating the pinned image
+
+The digest in `docker-compose.yml` is the image index for the `latest` tag at the commit named in the comment above it. To upgrade, review the target release or commit, then resolve its digest instead of copying a tag:
+
+```bash
+docker buildx imagetools inspect ghcr.io/joescars/lunatv:latest   # or :sha-<full commit> / :vX.Y.Z
+```
+
+Confirm the image's `org.opencontainers.image.revision` label matches the reviewed commit, replace the `@sha256:…` value in `docker-compose.yml`, then run `docker compose pull && docker compose up -d`.
 
 ## Configuration
 
