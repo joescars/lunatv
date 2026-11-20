@@ -92,6 +92,9 @@ async function stopRecording(recording) {
     && String(candidate.ChannelOnly) === String(recording.ChannelNumber)
     && Number(candidate.DateTimeOnly) === Number(recording.StartTime)
   ));
+  // Rule removal must succeed first: deleting the file while the rule remains
+  // would let the engine schedule the airing again. A failure here throws.
+  let ruleDeleted = false;
   if (rule && rule.RecordingRuleID) {
     const params = new URLSearchParams({
       DeviceAuth: device.DeviceAuth,
@@ -100,12 +103,43 @@ async function stopRecording(recording) {
     });
     const { res } = await fetchWithTimeout(`${API_BASE}/api/recording_rules?${params.toString()}`, { method: 'POST' });
     if (!res.ok) throw new Error(`Recording rule delete failed: ${res.status} ${res.statusText}`);
+    ruleDeleted = true;
   }
-  await fetchWithTimeout(`${RECORD_BASE}/recording_events.post?sync`, { method: 'POST' });
+
+  // The sync only nudges the engine to notice the rule change sooner than its
+  // own poll, so it is best-effort: its failure must not leave the active file
+  // writing after the rule is already gone.
+  let syncError = null;
+  try {
+    const { res } = await fetchWithTimeout(`${RECORD_BASE}/recording_events.post?sync`, { method: 'POST' });
+    if (!res.ok) syncError = new Error(`Engine sync failed: ${res.status} ${res.statusText}`);
+  } catch (err) {
+    syncError = new Error(`Engine sync failed: ${err.message}`);
+  }
+
   // The RECORD engine exposes no stop-and-keep-partial operation. Deleting an
   // active file terminates its writer; removing the rule first prevents it from
   // being immediately scheduled again.
-  await deleteRecording(recording);
+  try {
+    await deleteRecording(recording);
+  } catch (err) {
+    const parts = [
+      ruleDeleted ? 'rule deleted' : 'no matching rule found',
+      syncError ? syncError.message : 'engine synced',
+    ];
+    const failure = new Error(`Recording file delete failed (${parts.join('; ')}): ${err.message}`);
+    failure.ruleDeleted = ruleDeleted;
+    failure.synced = !syncError;
+    failure.cause = err;
+    throw failure;
+  }
+
+  return {
+    ruleDeleted,
+    synced: !syncError,
+    fileDeleted: true,
+    warning: syncError ? `${syncError.message}; recording file was deleted anyway` : null,
+  };
 }
 
 async function getJson(url) {
