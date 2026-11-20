@@ -398,6 +398,51 @@ test('recordingStream: every start gets its own directory; an old exit cannot re
   assert.ok(!fs.existsSync(dirA));
 });
 
+test('recordingStream: explicit stop removes the dir on any ffmpeg exit (even code 0); natural EOF keeps the VOD', () => {
+  const rs = freshRequire('recordingStream.js');
+  const startOne = (id) => {
+    rs.start(id, `http://10.9.8.7/recorded/play?id=${id}`, 'medium');
+    const proc = spawned[spawned.length - 1];
+    const session = rs._sessions.get(`${id}:medium`);
+    fs.writeFileSync(session.playlist, '#EXTM3U\n#EXT-X-ENDLIST\n');
+    return { proc, session, k: `${id}:medium` };
+  };
+
+  // Stop requested while running; ffmpeg exits cleanly (code 0) on SIGTERM.
+  const a = startOne('stop00');
+  rs.stopById('stop00', 'medium');
+  assert.deepEqual(a.proc.signals, ['SIGTERM']);
+  a.proc.finish(0);
+  assert.ok(!fs.existsSync(a.session.dir), 'stopped session dir removed immediately on code 0');
+  assert.notEqual(rs._sessions.get(a.k), a.session, 'stopped session no longer served');
+
+  // Non-zero exit after an explicit stop also cleans up.
+  const b = startOne('stop01');
+  rs.stopById('stop01', 'medium');
+  b.proc.finish(255);
+  assert.ok(!fs.existsSync(b.session.dir));
+
+  // Natural completion (no stop): VOD stays for seeking, until a later stop releases it.
+  const c = startOne('done00');
+  c.proc.finish(0);
+  assert.ok(fs.existsSync(c.session.dir), 'naturally finished VOD retained');
+  assert.equal(rs._sessions.get(c.k), c.session);
+  rs.stopById('done00', 'medium');
+  assert.ok(!fs.existsSync(c.session.dir), 'stop on a finished VOD releases it');
+
+  // Stopped session replaced by a new start before its ffmpeg exits: the
+  // late code-0 exit removes only the old dir and leaves the replacement.
+  const d = startOne('stop02');
+  rs.stopById('stop02', 'medium');
+  rs.start('stop02', 'http://10.9.8.7/recorded/play?id=stop02', 'medium');
+  const replacement = rs._sessions.get(d.k);
+  assert.notEqual(replacement, d.session);
+  d.proc.finish(0);
+  assert.ok(!fs.existsSync(d.session.dir));
+  assert.ok(fs.existsSync(replacement.dir), 'replacement dir untouched');
+  assert.equal(rs._sessions.get(d.k), replacement, 'replacement still registered');
+});
+
 test('recordingStream: isReady sanitizes stderr and SIGKILL fallback applies on stop', async () => {
   const rs = freshRequire('recordingStream.js');
   rs.start('beef01', 'http://10.9.8.7/recorded/play?id=beef01', 'medium');
