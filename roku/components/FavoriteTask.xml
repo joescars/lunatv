@@ -6,6 +6,7 @@
         <field id="favorite" type="boolean" />
         <field id="result" type="assocarray" alwaysNotify="true" />
     </interface>
+    <script type="text/brightscript" uri="DeployConfig.brs" />
     <script type="text/brightscript" uri="pkg:/components/Net.brs" />
     <script type="text/brightscript" uri="FavoriteTask.brs" />
 </component>

@@ -10,6 +10,7 @@
     "test:ui": "node tests/ui.mjs",
     "test:server": "node --test tests/server-hardening.cjs",
     "test:streams": "node tests/stream-viewers.cjs",
+    "test:auth": "node --test tests/auth.cjs",
     "test:roku": "node --test tests/roku-static.cjs"
   },
   "dependencies": {

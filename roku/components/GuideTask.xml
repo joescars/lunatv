@@ -6,6 +6,7 @@
         <!-- out: { success, errorMessage, serverTime, channels } - see GuideTask.brs -->
         <field id="guideResult" type="assocarray" alwaysNotify="true" />
     </interface>
+    <script type="text/brightscript" uri="DeployConfig.brs" />
     <script type="text/brightscript" uri="pkg:/components/Net.brs" />
     <script type="text/brightscript" uri="GuideTask.brs" />
 </component>

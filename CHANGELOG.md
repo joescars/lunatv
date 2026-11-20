@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+### Added: authentication and role-based authorization (#58)
+
+- Added fail-closed session login, optional trusted-proxy authentication, and scoped Roku/API bearer access for admin, recording, and mutation routes. Public guide/live playback remains available for older Roku clients unless `AUTH_PUBLIC_LIVE=0`.
+- Preserved the same-origin POST defense; cookie/proxy-authenticated mutations additionally require same-origin browser headers. `/healthz` remains public for the container health check while `/stream/metrics` requires admin access.
+- Added a credential setup script, login UI, Roku bearer support, and an [authentication runbook](docs/authentication.md). The published pinned image does not include this change until its digest is updated.
+
 ### Fixed: remaining server/Docker hardening from #36
 
 - The container now runs the app as the unprivileged `node` user. A small

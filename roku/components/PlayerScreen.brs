@@ -254,6 +254,7 @@ sub playStream()
     content = CreateObject("roSGNode", "ContentNode")
     content.url = url
     content.streamFormat = "hls"
+    applyAuthHeader(content)
     content.live = true
 
     ' Unlike a TV or browser, Roku's Video node does not auto-detect
@@ -948,4 +949,11 @@ sub requestStreamStop(channelNumber as dynamic, codec as string, profile as stri
     task.codec = codec
     task.profile = profile
     task.control = "RUN"
+end sub
+
+' Playlist/segment requests made by the Video node bypass Net.brs, so the
+' optional API token must be set on the content itself.
+sub applyAuthHeader(content as object)
+    token = GetPackagedApiToken()
+    if token <> "" then content.HttpHeaders = ["Authorization: Bearer " + token]
 end sub

@@ -13,6 +13,7 @@
         <BusySpinner id="spinner" translation="[910, 440]" />
         <Label id="status" translation="[0, 560]" width="1920" height="70" horizAlign="center" font="font:MediumSystemFont" color="0xFFFFFFFF" />
     </children>
+    <script type="text/brightscript" uri="DeployConfig.brs" />
     <script type="text/brightscript" uri="ErrorText.brs" />
     <script type="text/brightscript" uri="RecordingPlayerScreen.brs" />
 </component>

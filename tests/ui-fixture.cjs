@@ -2,6 +2,8 @@
 process.env.PORT ||= '8181';
 process.env.HDHOMERUN_HOST = 'synthetic-device.invalid';
 process.env.WEBVTT_SIDECAR_MODE = 'off';
+// UI/a11y checks drive the app as an operator; auth has its own suite (npm run test:auth).
+process.env.AUTH_MODE = 'off';
 const hdhr = require('../src/hdhomerun');
 const guide = require('../src/guide');
 const record = require('../src/hdhomerunRecord');

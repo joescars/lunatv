@@ -81,6 +81,15 @@ HDHOMERUN_WEB_URL=http://192.168.1.100:8080
 runtime from the app (**Options / `*`** on the guide screen, then Settings).
 The value saved to the Roku registry takes precedence over the packaged URL.
 
+If the server requires authentication for recordings or live TV, generate a
+scoped API token as described in [authentication](../docs/authentication.md).
+Put the plaintext token in the ignored `roku/.env` as `HDHOMERUN_API_TOKEN`
+(alongside `HDHOMERUN_WEB_URL`), then repackage and sideload. The token is
+embedded in the Roku package: use a viewer token for playback only or an
+operator token for favorites and DVR changes; never use an admin token.
+Older Roku builds can still watch public live TV but cannot access protected
+features. Verify private playback on the device after changing auth settings.
+
 ## 3. Deploy
 
 ```bash

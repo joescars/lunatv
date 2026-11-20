@@ -502,11 +502,11 @@ test('/stream/.../stats response omits the VTT file path and sanitizes tuner err
 });
 
 // ------------------------------------------------ Docker: non-root + health
-test('Dockerfile: amd64 Jellyfin ffmpeg7 kept; HEALTHCHECK and non-root entrypoint present', () => {
+test('Dockerfile: amd64 Jellyfin ffmpeg7 kept; HEALTHCHECK (unauthenticated /healthz) and non-root entrypoint present', () => {
   const dockerfile = fs.readFileSync(path.join(__dirname, '..', 'Dockerfile'), 'utf8');
   assert.match(dockerfile, /Architectures: amd64/);
   assert.match(dockerfile, /jellyfin-ffmpeg7/);
-  assert.match(dockerfile, /^HEALTHCHECK .*\\\n\s+CMD \["node", "-e", ".*\/stream\/metrics/m);
+  assert.match(dockerfile, /^HEALTHCHECK .*\\\n\s+CMD \["node", "-e", ".*\/healthz/m);
   assert.match(dockerfile, /^ENTRYPOINT \["\/app\/docker-entrypoint\.sh"\]$/m);
   assert.match(dockerfile, /^CMD \["node", "server\.js"\]$/m);
   const mode = fs.statSync(path.join(__dirname, '..', 'docker-entrypoint.sh')).mode;

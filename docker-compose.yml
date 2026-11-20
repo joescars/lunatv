@@ -14,5 +14,21 @@ services:
       - SOURCE_CAPTION_PROBE=${SOURCE_CAPTION_PROBE:-off}
       - RECORD_ENGINE_HOST=${RECORD_ENGINE_HOST:-}
       - RECORD_ENGINE_PORT=${RECORD_ENGINE_PORT:-37899}
+      # Authentication (docs/authentication.md). With none of these set, admin
+      # and recording routes are unreachable (fail closed); live TV stays open.
+      - AUTH_MODE=${AUTH_MODE:-session}
+      - AUTH_ADMIN_USERNAME=${AUTH_ADMIN_USERNAME:-admin}
+      - AUTH_ADMIN_PASSWORD_HASH=${AUTH_ADMIN_PASSWORD_HASH:-}
+      - AUTH_SESSION_SECRET=${AUTH_SESSION_SECRET:-}
+      - AUTH_API_TOKEN_HASH=${AUTH_API_TOKEN_HASH:-}
+      - AUTH_API_TOKEN_ROLE=${AUTH_API_TOKEN_ROLE:-operator}
+      - AUTH_PUBLIC_LIVE=${AUTH_PUBLIC_LIVE:-1}
+      - AUTH_COOKIE_SECURE=${AUTH_COOKIE_SECURE:-auto}
+      - AUTH_PROXY_SECRET=${AUTH_PROXY_SECRET:-}
+      - AUTH_PROXY_USER_HEADER=${AUTH_PROXY_USER_HEADER:-x-forwarded-user}
+      - AUTH_PROXY_ADMINS=${AUTH_PROXY_ADMINS:-}
+      - AUTH_PROXY_OPERATORS=${AUTH_PROXY_OPERATORS:-}
+      - AUTH_PROXY_DEFAULT_ROLE=${AUTH_PROXY_DEFAULT_ROLE:-viewer}
+      - TRUST_PROXY=${TRUST_PROXY:-}
     devices:
       - /dev/dri:/dev/dri
