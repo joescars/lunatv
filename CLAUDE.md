@@ -13,7 +13,7 @@ A mobile-responsive web UI for an HDHomeRun network tuner — a friendlier alter
 ```bash
 npm install              # install dependencies
 npm start                # run locally (node server.js)
-docker compose up -d           # run the published image (pull only)
+docker compose up -d           # run the digest-pinned published image (loopback-only port; see LUNATV_BIND_ADDRESS)
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build   # build and run local code
 ```
 

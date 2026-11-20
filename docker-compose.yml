@@ -1,11 +1,20 @@
 services:
   hdhomerun-web:
-    image: ghcr.io/joescars/lunatv:latest
-    pull_policy: always
+    # Pinned to an immutable, reviewed digest (multi-arch index; linux/amd64).
+    # Built from commit bd5caa2a91fbb5e7b96aaff9e0831789cc90da66 (the `latest`
+    # and `sha-bd5caa2...` tags resolved to this digest on 2026-11-19).
+    # To upgrade, review the new release, resolve its digest from the registry
+    # (see README "Updating the pinned image") and change it here deliberately.
+    image: ghcr.io/joescars/lunatv@sha256:47951128b77c1055fb8e4a25fb68e4ecc12fe65173161021bc61844a34e30c76
+    pull_policy: missing
     container_name: hdhomerun-web
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      # Loopback-only by default: the app has no built-in access control for
+      # the admin and mutation routes. Set LUNATV_BIND_ADDRESS in .env to a
+      # trusted LAN interface IP (e.g. for Roku/other devices) only on a
+      # network you trust or behind an authenticated reverse proxy/firewall.
+      - "${LUNATV_BIND_ADDRESS:-127.0.0.1}:8080:8080"
     environment:
       - HDHOMERUN_HOST=${HDHOMERUN_HOST}
       - HDHOMERUN_PORT=${HDHOMERUN_PORT:-80}
