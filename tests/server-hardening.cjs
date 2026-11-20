@@ -545,3 +545,100 @@ test('docker-entrypoint.sh: drops root to node with the GPU node group IDs (stub
   assert.match(out.stdout, /--clear-groups -- node server\.js/);
   assert.match(out.stderr, /no group-accessible \/dev\/dri/);
 });
+
+// ------------------------------------------------- RECORD stopRecording
+const ACTIVE = {
+  id: 'ab', SeriesID: 'S1', ChannelNumber: '2.1', StartTime: 1000, CmdURL: 'http://10.9.8.7/cmd?id=ab',
+};
+
+// Routes stubbed fetch calls by endpoint; `fail` maps a step to 'status' | 'throw'.
+function stubStopFetch(fail = {}) {
+  const calls = [];
+  global.fetch = async (url, options = {}) => {
+    const u = String(url);
+    const step = u.includes('recording_events.post') ? 'sync'
+      : u.includes('Cmd=delete') ? 'ruleDelete'
+        : u.includes('api.hdhomerun.com') ? 'ruleList'
+          : u.includes('cmd=delete') ? 'fileDelete' : 'other';
+    calls.push(step);
+    if (fail[step] === 'throw') throw new Error(`${step} timed out`);
+    const ok = fail[step] !== 'status';
+    const body = step === 'ruleList'
+      ? JSON.stringify([{ RecordingRuleID: 'R9', SeriesID: 'S1', ChannelOnly: '2.1', DateTimeOnly: 1000 }])
+      : '';
+    return { ok, status: ok ? 200 : 500, statusText: ok ? 'OK' : 'Boom', text: async () => body };
+  };
+  return calls;
+}
+
+async function freshStopRecord() {
+  const record = freshRequire('hdhomerunRecord.js');
+  require(src('hdhomerun.js')).getDeviceInfo = async () => ({ DeviceAuth: 'auth' });
+  return record;
+}
+
+test('stopRecording deletes rule, syncs, then deletes the file', async () => {
+  const record = await freshStopRecord();
+  const calls = stubStopFetch();
+  const result = await record.stopRecording(ACTIVE);
+  assert.deepEqual(calls, ['ruleList', 'ruleDelete', 'sync', 'fileDelete']);
+  assert.deepEqual(result, { ruleDeleted: true, synced: true, fileDeleted: true, warning: null });
+});
+
+for (const mode of ['throw', 'status']) {
+  test(`stopRecording still deletes the active file when engine sync fails (${mode}) and reports a warning`, async () => {
+    const record = await freshStopRecord();
+    const calls = stubStopFetch({ sync: mode });
+    const result = await record.stopRecording(ACTIVE);
+    assert.deepEqual(calls, ['ruleList', 'ruleDelete', 'sync', 'fileDelete']);
+    assert.equal(result.ruleDeleted, true);
+    assert.equal(result.synced, false);
+    assert.equal(result.fileDeleted, true);
+    assert.match(result.warning, /Engine sync failed/);
+  });
+}
+
+test('stopRecording reports file-delete failure separately, including rule and sync outcomes', async () => {
+  const record = await freshStopRecord();
+  let calls = stubStopFetch({ fileDelete: 'status' });
+  await assert.rejects(record.stopRecording(ACTIVE), (err) => (
+    /Recording file delete failed \(rule deleted; engine synced\)/.test(err.message)
+    && err.ruleDeleted === true && err.synced === true
+  ));
+  assert.deepEqual(calls, ['ruleList', 'ruleDelete', 'sync', 'fileDelete']);
+
+  // Both sync and file deletion fail: both are visible, and delete was still tried.
+  calls = stubStopFetch({ sync: 'throw', fileDelete: 'throw' });
+  await assert.rejects(record.stopRecording(ACTIVE), (err) => (
+    /rule deleted; Engine sync failed: sync timed out\): fileDelete timed out/.test(err.message)
+    && err.ruleDeleted === true && err.synced === false
+  ));
+  assert.deepEqual(calls, ['ruleList', 'ruleDelete', 'sync', 'fileDelete']);
+});
+
+test('stopRecording does not delete the file or sync when rule deletion fails', async () => {
+  const record = await freshStopRecord();
+  const calls = stubStopFetch({ ruleDelete: 'status' });
+  await assert.rejects(record.stopRecording(ACTIVE), /Recording rule delete failed/);
+  assert.deepEqual(calls, ['ruleList', 'ruleDelete']);
+});
+
+test('POST /api/recordings/:id/stop surfaces the sync warning and file-delete errors', async () => {
+  delete require.cache[require.resolve(src('routes/recordings.js'))];
+  const record = require(src('hdhomerunRecord.js'));
+  const orig = { ...record };
+  record.getRecording = async () => ({ ...ACTIVE, recording: true });
+  const app = express();
+  app.use(require(src('routes/recordings.js')));
+  const server = await listen(app);
+  try {
+    record.stopRecording = async () => ({ ruleDeleted: true, synced: false, fileDeleted: true, warning: 'Engine sync failed: x; recording file was deleted anyway' });
+    let res = await request(server, 'POST', '/api/recordings/ab/stop');
+    assert.equal(res.status, 200);
+    assert.deepEqual(JSON.parse(res.body), { stopped: true, warning: 'Engine sync failed: x; recording file was deleted anyway' });
+    record.stopRecording = async () => { throw new Error('Recording file delete failed (rule deleted; engine synced): nope'); };
+    res = await request(server, 'POST', '/api/recordings/ab/stop');
+    assert.equal(res.status, 502);
+    assert.match(res.body, /Recording file delete failed/);
+  } finally { server.close(); Object.assign(record, orig); }
+});
