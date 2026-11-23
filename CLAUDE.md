@@ -85,9 +85,11 @@ Things that will bite:
   in full via `print` (visible on `telnet <roku-ip> 8085`) and shows a
   truncated line on TV.
 - **Transcoding target is codec-per-client, normally not MPEG-2 passthrough.**
-  `src/stream.js` normally QSV-decodes the tuner's raw MPEG2/AC3 (browsers
-  can't decode MPEG2 at all), then re-encodes with `h264_qsv` or `hevc_qsv`
-  depending on a `:codec` path segment (`/stream/<ch>/h264/...` vs
+  `src/stream.js` decodes the tuner's raw MPEG2/AC3 (browsers can't decode
+  MPEG2 at all; software decode by default) and re-encodes on the
+  `HW_ACCEL` GPU — `h264_qsv`/`hevc_qsv` or `h264_nvenc`/`hevc_nvenc`, with
+  vendor args in `src/hwAccel.js` (docs/adr/0001) — depending on a `:codec`
+  path segment (`/stream/<ch>/h264/...` vs
   `/stream/<ch>/hevc/...`, validated against `CODEC_RE` in
   `src/routes/watch.js`). The browser player (`views/watch.ejs`) always
   requests `h264` — hls.js's MPEG-TS demuxer parses H.264 NAL units only and
@@ -96,7 +98,7 @@ Things that will bite:
   `docs/closed-captioning-options.md`) — users can switch to `hevc` for
   better bitrate/quality in Settings if they don't need captions. There's
   also a third Roku-only `direct` codec value: raw MPEG2/AC3 rewrapped into
-  HLS unchanged (`-c copy`, no QSV decode/encode), an experimental
+  HLS unchanged (`-c copy`, no GPU decode/encode), an experimental
   Settings-only opt-in for users whose Roku hardware can decode MPEG2 — it
   worked end-to-end (video, audio, and captions) on the one device this was
   tested against, but MPEG2 decode support is known to vary across Roku

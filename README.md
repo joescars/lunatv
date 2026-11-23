@@ -5,7 +5,7 @@ A self-hosted web and Roku client for watching live TV from an [HDHomeRun](https
 ## Features
 
 - **Guide** (`/` or `/guide`) with search, favorites, hidden-channel filters, program details, artwork, and a desktop grid (`/guide/grid`). Stale guides refresh when a background tab resumes without losing filters, focus, or scroll position.
-- **Live playback** in an overlay. The server converts HDHomeRun MPEG-2/AC-3 to H.264/AAC HLS for browsers, using QSV encoding by default. Browser playback includes captions, hls.js recovery, native-HLS error handling, and bfcache recovery.
+- **Live playback** in an overlay. The server converts HDHomeRun MPEG-2/AC-3 to H.264/AAC HLS for browsers, using Intel QSV (default) or NVIDIA NVENC hardware encoding. Browser playback includes captions, hls.js recovery, native-HLS error handling, and bfcache recovery.
 - **DVR recordings** (`/recordings`) through an optional [HDHomeRun RECORD](https://info.hdhomerun.com/info/dvr) engine. Recordings are seekable HLS streams and clean up automatically after playback.
 - **Admin tools** for device information, channel lineup/favorites/hidden channels, channel scans, and tuner status.
 - **Roku client** in [`roku/`](roku/) with live TV, guide previews, H.264/HEVC/Direct modes, captions, diagnostics, recordings, and optional DVR scheduling.
@@ -20,6 +20,7 @@ The default Compose file pulls the published image. Create `.env` beside it:
 ```dotenv
 HDHOMERUN_HOST=192.168.1.100
 HDHOMERUN_PORT=80
+HW_ACCEL=qsv
 STREAM_DECODE_MODE=sw
 WEBVTT_SIDECAR_MODE=off
 SOURCE_CAPTION_PROBE=off
@@ -43,6 +44,16 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 
 The override builds `lunatv:dev`; plain `docker compose up -d` always pulls `ghcr.io/joescars/lunatv:latest`.
 
+### NVIDIA GPUs
+
+Install the NVIDIA driver and [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) on the host, set `HW_ACCEL=nvidia` in `.env`, and add the NVIDIA override (requires Docker Compose v2.24+):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.nvidia.yml up -d
+```
+
+The override removes the `/dev/dri` mapping and reserves the GPU. The image is the same; Jellyfin ffmpeg includes NVENC. **Admin → Status** and the startup log show which accelerator is active. To run the local checkout on NVIDIA, add `-f docker-compose.dev.yml` before the NVIDIA file and pass `--build`.
+
 ## Configuration
 
 `HDHOMERUN_HOST` is required. Other settings:
@@ -51,14 +62,15 @@ The override builds `lunatv:dev`; plain `docker compose up -d` always pulls `ghc
 |---|---:|---|
 | `HDHOMERUN_PORT` | `80` | HDHomeRun HTTP port. |
 | `PORT` | `8080` | Web server port inside the container. |
-| `STREAM_DECODE_MODE` | `sw` | `sw` preserves browser CEA-608 captions while QSV still encodes; `qsv` reduces CPU use but does not preserve embedded captions. QSV automatically selects the source decoder. |
+| `HW_ACCEL` | `qsv` | Hardware accelerator: `qsv` (Intel Quick Sync) or `nvidia` (NVENC/CUDA). Any other value stops the server at startup. |
+| `STREAM_DECODE_MODE` | `sw` | `sw` decodes on the CPU and preserves browser CEA-608 captions while the GPU still encodes. `hw` (legacy `qsv`) decodes on the GPU to reduce CPU use; QSV drops embedded captions, NVIDIA caption support is unverified. The source decoder is selected automatically. |
 | `WEBVTT_SIDECAR_MODE` | `off` | Experimental WebVTT caption extraction. |
 | `SOURCE_CAPTION_PROBE` | `off` | Raw-input caption diagnostics. |
 | `RECORD_ENGINE_HOST` | — | Optional RECORD engine address; enables DVR controls. |
 | `RECORD_ENGINE_PORT` | `37899` | RECORD engine HTTP port. |
 | `STREAM_MAX_SESSIONS` | `4` | Fallback concurrent live-session limit when the device does not report its tuner count. Excess starts return 503. |
 
-The default Compose configuration is software decode plus QSV encode. QSV playback requires an Intel GPU and `/dev/dri`; the guide, lineup, scan, and status pages work without it.
+The default Compose configuration is software decode plus QSV encode. Playback requires an Intel GPU with `/dev/dri`, or an NVIDIA GPU with the NVIDIA override; the guide, lineup, scan, and status pages work without it.
 
 ## Local development
 
@@ -67,7 +79,7 @@ npm ci
 HDHOMERUN_HOST=<device-ip> npm start
 ```
 
-Live playback also requires an ffmpeg build with QSV support. The Docker image supplies Jellyfin ffmpeg and the Intel media driver.
+Live playback also requires an ffmpeg build with QSV or NVENC support, matching `HW_ACCEL`. The Docker image supplies Jellyfin ffmpeg (both) and the Intel media driver.
 
 ## API handshake
 

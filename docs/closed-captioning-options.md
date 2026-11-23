@@ -45,6 +45,13 @@ true now:
   doesn't have this issue, which is part of why the failure was confusing
   during diagnosis — the sidecar's plumbing "looked" more standard while
   being the actually-broken path.
+- **NVIDIA (`HW_ACCEL=nvidia`)**: `h264_nvenc` and `hevc_nvenc` both expose
+  `-a53cc` (default on), so the app sets it for both codecs. With software
+  decode this is the same pipeline as QSV and is expected to work; it has
+  not yet been confirmed on NVIDIA hardware. With `STREAM_DECODE_MODE=hw`
+  (`-hwaccel cuda`) diagnostics report `captionActive: null` (unverified),
+  and QSV hardware decode now reports `captionActive: false`. HEVC captions
+  on Roku need a separate confirmation before the Roku Settings text changes.
 - **Roku**: `hevc_qsv` was confirmed (via its full `ffmpeg -h encoder=hevc_qsv`
   option list) to have no caption-related option at all — no `-a53cc`
   equivalent exists, hardware or otherwise. Software `libx265` does support

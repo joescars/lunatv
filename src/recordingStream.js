@@ -5,7 +5,11 @@ const os = require('os');
 const crypto = require('crypto');
 
 const { sanitizeFfmpegError, terminate } = require('./ffmpegSupport');
+const { getAccelerator } = require('./hwAccel');
 
+// Recordings are software-decoded and encoded with the configured hardware
+// accelerator's H.264 encoder (h264_qsv or h264_nvenc).
+const ACCEL = getAccelerator();
 const ROOT = path.join(os.tmpdir(), 'hdhomerun-web-recordings');
 const IDLE_TIMEOUT_MS = 60_000;
 // A recording that transcoded to EOF is a complete VOD; keep it seekable longer than a live session.
@@ -65,7 +69,7 @@ function start(id, sourceUrl, profile) {
     '-hide_banner', '-loglevel', 'warning',
     '-i', sourceUrl,
     '-map', '0:v:0', '-map', '0:a:0?',
-    '-c:v', 'h264_qsv', '-look_ahead', '0', '-forced_idr', '1',
+    '-c:v', ACCEL.encoders.h264, ...ACCEL.encoderArgs,
     '-b:v', config.videoBitrate, '-maxrate', config.maxrate, '-bufsize', config.bufsize,
     '-g', '30', '-force_key_frames', 'expr:eq(n,0)+gte(t,n_forced*1)',
     '-c:a', 'aac', '-b:a', config.audioBitrate, '-ac', '2',

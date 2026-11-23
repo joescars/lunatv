@@ -5,6 +5,7 @@ const os = require('os');
 
 const hdhr = require('./hdhomerun');
 const { sanitizeFfmpegError, terminate } = require('./ffmpegSupport');
+const { getAccelerator, resolveDecodeMode } = require('./hwAccel');
 
 const STREAM_ROOT = path.join(os.tmpdir(), 'hdhomerun-web-streams');
 const IDLE_TIMEOUT_MS = 20_000;
@@ -27,16 +28,16 @@ const DEFAULT_PROFILE = 'medium';
 // fallback in case that bug is ever fixed upstream.
 const WEBVTT_SIDECAR_MODE = String(process.env.WEBVTT_SIDECAR_MODE || 'off').toLowerCase() === 'on' ? 'on' : 'off';
 const SOURCE_CAPTION_PROBE = String(process.env.SOURCE_CAPTION_PROBE || 'off').toLowerCase() === 'on';
-// Full hardware (qsv) decode does not propagate A/53 CC side data to the
-// encoder, so -a53cc silently produces captionless output. Software decode
-// (still QSV-encoded) is required for embedded captions to survive at all;
-// confirmed via VLC + hls.js CEA-608 parsing. Costs CPU per concurrent
-// stream but is the default since captionless output is a worse trade-off.
-const STREAM_DECODE_MODE = (
-  String(process.env.STREAM_DECODE_MODE || process.env.CAPTION_DECODE_MODE || 'sw').toLowerCase() === 'qsv'
-    ? 'qsv'
-    : 'sw'
-);
+// Hardware accelerator (HW_ACCEL=qsv|nvidia) and decode mode
+// (STREAM_DECODE_MODE=sw|hw, legacy `qsv` = hw) are independent; see
+// src/hwAccel.js and docs/adr/0001. Full QSV hardware decode does not
+// propagate A/53 CC side data to the encoder, so -a53cc silently produces
+// captionless output. Software decode (still hardware-encoded) is required for
+// embedded captions to survive; confirmed via VLC + hls.js CEA-608 parsing.
+// Costs CPU per concurrent stream but is the default since captionless output
+// is a worse trade-off.
+const ACCEL = getAccelerator();
+const STREAM_DECODE_MODE = resolveDecodeMode();
 
 const QUALITY_PROFILES = {
   low: {
@@ -63,10 +64,8 @@ const STREAM_PROFILES = Object.keys(QUALITY_PROFILES);
 // h264 is the broadly-compatible default (every browser's MSE/hls.js pipeline
 // plays it). hevc is opt-in, used only by the Roku client, whose Video node
 // decodes it natively rather than through a JS demuxer - see CLAUDE.md.
-const CODECS = {
-  h264: 'h264_qsv',
-  hevc: 'hevc_qsv',
-};
+// Values are the encoder for the configured hardware accelerator.
+const CODECS = { ...ACCEL.encoders };
 
 // "direct" is not a real encoder - it means "remux only, -c copy, no QSV
 // decode/encode at all". Experimental opt-in for Roku (see Settings): the
@@ -375,45 +374,41 @@ function getCaptionConfig(codec) {
     };
   }
 
-  // h264_qsv exposes -a53cc; hevc_qsv does not. Keep HEVC on pure hardware
-  // path without unsupported flags, and surface this in diagnostics.
-  if (codec === 'h264') {
+  // h264_qsv, h264_nvenc and hevc_nvenc expose -a53cc; hevc_qsv does not.
+  // Keep unsupported encoders free of the flag and surface it in diagnostics.
+  if (!ACCEL.captionCodecs.includes(codec)) {
+    return {
+      ffmpegArgs: [],
+      active: false,
+      strategy: `no_a53cc_${CODECS[codec]}`,
+    };
+  }
+
+  const strategy = `a53cc_${CODECS[codec]}`;
+  if (STREAM_DECODE_MODE === 'hw') {
+    // Hardware decode may drop A/53 CC before the encoder sees it: confirmed
+    // for QSV (false), unverified for NVIDIA (null = unknown).
     return {
       ffmpegArgs: ['-a53cc', '1'],
-      active: true,
-      strategy: 'a53cc_h264_qsv',
+      active: ACCEL.hwDecodeCaptions,
+      strategy: `${strategy}_hw_decode_${ACCEL.hwDecodeCaptions === false ? 'drops_captions' : 'unverified'}`,
     };
   }
 
   return {
-    ffmpegArgs: [],
-    active: false,
-    strategy: 'no_explicit_hevc_qsv_flag',
+    ffmpegArgs: ['-a53cc', '1'],
+    active: true,
+    strategy,
   };
 }
 
 function getDecodeConfig() {
-  if (STREAM_DECODE_MODE === 'sw') {
-    // No forced input decoder: the source codec is unknown up front (ATSC 1.0
-    // is MPEG-2, but cable/other channels can be H.264 or HEVC), and without a
-    // -hwaccel flag ffmpeg already picks the matching software decoder. The QSV
-    // device is only needed for the hwupload before the hardware encoder.
-    return {
-      decoder: 'auto_software',
-      inputArgs: ['-init_hw_device', 'qsv=hw', '-filter_hw_device', 'hw'],
-      preEncodeArgs: ['-vf', 'format=nv12,hwupload=extra_hw_frames=64'],
-    };
-  }
-
-  // Full hardware decode. No forced -c:v: with -hwaccel qsv ffmpeg picks the
-  // matching *_qsv decoder (mpeg2_qsv, h264_qsv, hevc_qsv, ...) for whatever
-  // the channel carries. Forcing mpeg2_qsv made every non-MPEG-2 channel fail
-  // with "Decode error rate 1 exceeds maximum".
-  return {
-    decoder: 'auto_qsv',
-    inputArgs: ['-hwaccel', 'qsv', '-hwaccel_output_format', 'qsv'],
-    preEncodeArgs: [],
-  };
+  // No forced input decoder in either mode: the source codec is unknown up
+  // front (ATSC 1.0 is MPEG-2, but cable/other channels can be H.264 or
+  // HEVC). Without -hwaccel ffmpeg picks the matching software decoder; with
+  // it, the matching hardware decoder. Forcing mpeg2_qsv made every
+  // non-MPEG-2 channel fail with "Decode error rate 1 exceeds maximum".
+  return ACCEL[STREAM_DECODE_MODE];
 }
 
 const sessions = new Map();
@@ -544,7 +539,7 @@ function spawnFfmpeg(channel, codec, profile) {
       ...decodeConfig.preEncodeArgs,
       '-c:v', CODECS[codec],
       ...captionConfig.ffmpegArgs,
-      '-look_ahead', '0', '-forced_idr', '1',
+      ...ACCEL.encoderArgs,
       '-b:v', profileConfig.videoBitrate,
       '-maxrate', profileConfig.maxrate,
       '-bufsize', profileConfig.bufsize,
@@ -560,6 +555,7 @@ function spawnFfmpeg(channel, codec, profile) {
       playlist,
     ];
     ffmpegMeta = {
+      hwAccel: ACCEL.name,
       decodeMode: STREAM_DECODE_MODE,
       videoDecoder: decodeConfig.decoder,
       videoEncoder: CODECS[codec],
