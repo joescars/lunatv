@@ -69,7 +69,7 @@ COMPOSE_FILE=docker-compose.yml:docker-compose.nvidia.yml
 | `HDHOMERUN_PORT` | `80` | HDHomeRun HTTP port. |
 | `PORT` | `8080` | Web server port inside the container. |
 | `HW_ACCEL` | `qsv` | Hardware accelerator: `qsv` (Intel Quick Sync) or `nvidia` (NVENC/CUDA). Any other value stops the server at startup. |
-| `STREAM_DECODE_MODE` | `sw` | `sw` decodes on the CPU and preserves browser CEA-608 captions while the GPU still encodes. `hw` (legacy `qsv`) decodes on the GPU to reduce CPU use; QSV drops embedded captions, NVIDIA caption support is unverified. The source decoder is selected automatically. |
+| `STREAM_DECODE_MODE` | `sw` | `sw` decodes on the CPU and preserves browser CEA-608 captions while the GPU still encodes. `hw` (legacy `qsv`) decodes on the GPU to reduce CPU use; both QSV and NVIDIA drop embedded captions in this mode. The source decoder is selected automatically. |
 | `WEBVTT_SIDECAR_MODE` | `off` | Experimental WebVTT caption extraction. |
 | `SOURCE_CAPTION_PROBE` | `off` | Raw-input caption diagnostics. |
 | `RECORD_ENGINE_HOST` | — | Optional RECORD engine address; enables DVR controls. |

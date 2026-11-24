@@ -43,10 +43,11 @@ const ACCELERATORS = {
       inputArgs: ['-hwaccel', 'cuda', '-hwaccel_output_format', 'cuda'],
       preEncodeArgs: [],
     },
-    captionCodecs: ['h264', 'hevc'],
-    // Unverified: -hwaccel cuda keeps ffmpeg's native decoder, which may carry
-    // A/53 CC through. Reported as unknown until confirmed on hardware.
-    hwDecodeCaptions: null,
+    // hevc_nvenc accepts -a53cc, but HEVC captions were not observed on Roku
+    // (GTX 1050 test), so HEVC is treated like hevc_qsv: no caption flag.
+    captionCodecs: ['h264'],
+    // Observed on a GTX 1050: -hwaccel cuda decode loses A/53 CC.
+    hwDecodeCaptions: false,
   },
 };
 

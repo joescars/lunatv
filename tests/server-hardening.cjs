@@ -453,27 +453,27 @@ test('hwAccel: defaults to qsv, normalizes case, rejects unknown values; decode 
   assert.equal(hw.describeTranscoding({ HW_ACCEL: 'nvidia' }).summary, 'NVIDIA NVENC encode, software decode');
 });
 
-test('HW_ACCEL=nvidia, software decode: nvenc encoders, no QSV device or upload, captions on h264 and hevc', () => {
+test('HW_ACCEL=nvidia, software decode: nvenc encoders, no QSV device or upload, captions on h264 only', () => {
   const stream = freshRequire('stream.js', { HW_ACCEL: 'nvidia', STREAM_DECODE_MODE: 'sw' });
   assert.deepEqual(stream.CODECS, { h264: 'h264_nvenc', hevc: 'hevc_nvenc' });
-  for (const [channel, codec, encoder] of [['31.1', 'h264', 'h264_nvenc'], ['31.2', 'hevc', 'hevc_nvenc']]) {
+  for (const [channel, codec, encoder, captions] of [['31.1', 'h264', 'h264_nvenc', true], ['31.2', 'hevc', 'hevc_nvenc', false]]) {
     stream.start(channel, codec, 'medium', 20);
     const proc = spawned[spawned.length - 1];
     assert.ok(!proc.args.some((a) => /qsv|hwupload|init_hw_device/.test(a)), proc.args.join(' '));
     assert.ok(!inputArgs(proc).includes('-hwaccel'));
     const after = outputArgs(proc);
     assert.equal(after[after.indexOf('-c:v') + 1], encoder);
-    assert.ok(after.includes('-a53cc'));
+    assert.equal(after.includes('-a53cc'), captions);
     assert.equal(after[after.indexOf('-forced-idr') + 1], '1');
     assert.ok(!after.includes('-look_ahead'), 'QSV-only option must not reach nvenc');
     const info = stream.getSessionInfo(channel, codec, 'medium').ffmpeg;
     assert.equal(info.hwAccel, 'nvidia');
-    assert.equal(info.captionActive, true);
-    assert.equal(info.captionStrategy, `a53cc_${encoder}`);
+    assert.equal(info.captionActive, captions);
+    assert.equal(info.captionStrategy, captions ? 'a53cc_h264_nvenc' : 'no_a53cc_hevc_nvenc');
   }
 });
 
-test('HW_ACCEL=nvidia, hardware decode: cuda hwaccel, captions requested but reported unverified', () => {
+test('HW_ACCEL=nvidia, hardware decode: cuda hwaccel, captions reported lost', () => {
   const stream = freshRequire('stream.js', { HW_ACCEL: 'nvidia', STREAM_DECODE_MODE: 'hw' });
   stream.start('32.1', 'h264', 'medium', 20);
   const proc = spawned[spawned.length - 1];
@@ -484,8 +484,8 @@ test('HW_ACCEL=nvidia, hardware decode: cuda hwaccel, captions requested but rep
   const info = stream.getSessionInfo('32.1', 'h264', 'medium').ffmpeg;
   assert.equal(info.decodeMode, 'hw');
   assert.equal(info.videoDecoder, 'auto_cuda');
-  assert.equal(info.captionActive, null);
-  assert.equal(info.captionStrategy, 'a53cc_h264_nvenc_hw_decode_unverified');
+  assert.equal(info.captionActive, false);
+  assert.equal(info.captionStrategy, 'a53cc_h264_nvenc_hw_decode_drops_captions');
 });
 
 test('recordingStream uses the configured accelerator encoder', () => {

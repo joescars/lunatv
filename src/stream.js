@@ -374,8 +374,9 @@ function getCaptionConfig(codec) {
     };
   }
 
-  // h264_qsv, h264_nvenc and hevc_nvenc expose -a53cc; hevc_qsv does not.
-  // Keep unsupported encoders free of the flag and surface it in diagnostics.
+  // Only H.264 carries working captions (h264_qsv, h264_nvenc). hevc_qsv has
+  // no -a53cc, and hevc_nvenc captions were not observed on Roku. Keep HEVC
+  // free of the flag and surface it in diagnostics.
   if (!ACCEL.captionCodecs.includes(codec)) {
     return {
       ffmpegArgs: [],
@@ -386,12 +387,12 @@ function getCaptionConfig(codec) {
 
   const strategy = `a53cc_${CODECS[codec]}`;
   if (STREAM_DECODE_MODE === 'hw') {
-    // Hardware decode may drop A/53 CC before the encoder sees it: confirmed
-    // for QSV (false), unverified for NVIDIA (null = unknown).
+    // Hardware decode drops A/53 CC before the encoder sees it (observed for
+    // both QSV and NVIDIA CUDA decode).
     return {
       ffmpegArgs: ['-a53cc', '1'],
       active: ACCEL.hwDecodeCaptions,
-      strategy: `${strategy}_hw_decode_${ACCEL.hwDecodeCaptions === false ? 'drops_captions' : 'unverified'}`,
+      strategy: `${strategy}_hw_decode_${ACCEL.hwDecodeCaptions ? 'keeps_captions' : 'drops_captions'}`,
     };
   }
 

@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## Unreleased
+## 2026-11-23
 
 ### Added: NVIDIA hardware encoding/decoding (`HW_ACCEL`)
 
@@ -17,9 +17,11 @@ All notable changes to this project are documented in this file.
   `COMPOSE_FILE=docker-compose.yml:docker-compose.nvidia.yml` in `.env` to
   use it without `-f` flags. Live playback and browser captions (H.264,
   software decode) verified on a GTX 1050.
-- NVENC sets `-a53cc` for H.264 and HEVC. Stream diagnostics include
-  `hwAccel`; QSV hardware decode now reports `captionActive: false` (it drops
-  captions) and NVIDIA hardware decode reports `null` (unverified).
+- Captions: H.264 keeps embedded captions with software decode on both
+  vendors (`-a53cc`). HEVC has no captions on either vendor (`hevc_nvenc`
+  captions were not observed on Roku), and hardware decode drops captions on
+  both; diagnostics now report `captionActive: false` for those cases and
+  include `hwAccel`.
 - Admin → Status and the startup log show the active accelerator and decode
   mode.
 
