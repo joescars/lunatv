@@ -23,4 +23,6 @@ services:
           devices:
             - driver: nvidia
               count: all
-              capabilities: [gpu, video, compute, utility]
+              # Docker's documented form; NVIDIA_DRIVER_CAPABILITIES above
+              # selects video (NVENC/NVDEC) + compute + utility.
+              capabilities: [gpu]
