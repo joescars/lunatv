@@ -24,7 +24,9 @@ for dev in /dev/dri/renderD* /dev/dri/card*; do
 done
 
 if [ -z "$groups" ]; then
-  echo "[entrypoint] no group-accessible /dev/dri nodes found; QSV needs devices: - /dev/dri:/dev/dri" >&2
+  if [ "${HW_ACCEL:-qsv}" = "qsv" ]; then
+    echo "[entrypoint] no group-accessible /dev/dri nodes found; QSV needs devices: - /dev/dri:/dev/dri" >&2
+  fi
   exec setpriv --reuid=node --regid=node --clear-groups -- "$@"
 fi
 
