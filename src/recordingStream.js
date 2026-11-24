@@ -36,6 +36,9 @@ function finished(session) {
 function stop(session, sessionKey) {
   if (!session) return;
   if (session.process.exitCode === null) {
+    // Remember the intent: ffmpeg usually exits 0 on SIGTERM, which must not
+    // be mistaken for a naturally completed VOD in the exit handler.
+    session.stopRequested = true;
     terminate(session.process);
     return;
   }
@@ -100,7 +103,7 @@ function start(id, sourceUrl, profile) {
     // Clean EOF of the current session: keep the finished playlist
     // (EXT-X-ENDLIST) and segments so the player can finish and seek; the idle
     // sweep / stop removes them.
-    if (code === 0 && owner) return;
+    if (code === 0 && owner && !session.stopRequested) return;
     if (code !== 0 && stderr) {
       console.warn(`[recording-stream] ffmpeg tail id=${id}: ${stderr.replace(/\s+/g, ' ').trim().slice(-1200)}`);
     }
@@ -108,6 +111,11 @@ function start(id, sourceUrl, profile) {
     // including after a restart replaced this session in the map.
     fs.rmSync(dir, { recursive: true, force: true });
     if (!owner) return;
+    if (session.stopRequested) {
+      // Explicit stop: release the session now; a replacement (not owner) is untouched.
+      sessions.delete(sessionKey);
+      return;
+    }
     setTimeout(() => {
       if (sessions.get(sessionKey) === session) sessions.delete(sessionKey);
     }, IDLE_TIMEOUT_MS).unref();
