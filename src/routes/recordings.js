@@ -87,8 +87,8 @@ router.post('/api/recordings/:id/stop', async (req, res) => {
     const recording = await record.getRecording(id);
     if (!recording) return res.status(404).json({ error: 'Recording not found' });
     if (!recording.recording) return res.status(409).json({ error: 'Recording is not active' });
-    await record.stopRecording(recording);
-    res.json({ stopped: true });
+    const result = await record.stopRecording(recording);
+    res.json({ stopped: true, ...(result && result.warning ? { warning: result.warning } : {}) });
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
