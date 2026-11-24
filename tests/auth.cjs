@@ -21,6 +21,7 @@ const hdhr = require(src('hdhomerun.js'));
 const record = require(src('hdhomerunRecord.js'));
 const guide = require(src('guide.js'));
 const { createApp } = require(src('app.js'));
+const { describeTranscoding } = require(src('hwAccel.js'));
 const { requiredLevel } = require(src('authPolicy.js'));
 const { hashPassword, verifyPassword } = require(src('auth.js'));
 
@@ -71,8 +72,8 @@ function baseEnv(extra = {}) {
   };
 }
 
-async function withApp(env, fn) {
-  const app = createApp({ env });
+async function withApp(env, fn, transcoding) {
+  const app = createApp({ env, transcoding });
   const server = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
   const port = server.address().port;
   const call = (method, urlPath, { headers = {}, body, cookie } = {}) => new Promise((resolve, reject) => {
@@ -183,7 +184,7 @@ test('public surface stays reachable anonymously: healthz, login page, guide, wa
     assert.equal((await call('GET', '/healthz')).status, 200);
     assert.equal((await call('GET', '/login')).status, 200);
     for (const [method, url] of [
-      ['GET', '/'], ['GET', '/guide'], ['GET', '/api/guide'], ['GET', '/watch/2.1'],
+      ['GET', '/'], ['GET', '/guide'], ['GET', '/guide/fragment'], ['GET', '/guide/grid'], ['GET', '/api/guide'], ['GET', '/watch/2.1'],
       ['GET', '/stream/2.1/h264/ready'], ['POST', '/stream/2.1/h264/medium/stop'], ['POST', '/stream/2.1/h264/medium/heartbeat'],
       ['GET', '/stream/2.1/h264/medium/stats'],
     ]) {
@@ -191,6 +192,16 @@ test('public surface stays reachable anonymously: healthz, login page, guide, wa
       assert.ok(settled(res), `${method} ${url} -> ${res.status}`);
     }
   });
+});
+
+test('signed-in tuner status retains the selected GPU summary', async () => {
+  const transcoding = describeTranscoding({ HW_ACCEL: 'nvidia', STREAM_DECODE_MODE: 'sw' });
+  await withApp(baseEnv(), async ({ login, call }) => {
+    const { cookie } = await login('admin', PW);
+    const res = await call('GET', '/admin/status', { cookie });
+    assert.equal(res.status, 200);
+    assert.ok(res.body.includes(`data-testid="transcoding-summary">Transcoding: ${transcoding.summary}`));
+  }, transcoding);
 });
 
 test('login form: bad credentials 401 without cookie; good credentials set an HttpOnly SameSite cookie', async () => {

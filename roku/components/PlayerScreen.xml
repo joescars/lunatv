@@ -150,6 +150,7 @@
     </children>
 
     <script type="text/brightscript" uri="DeployConfig.brs" />
+    <script type="text/brightscript" uri="Net.brs" />
 
     <script type="text/brightscript" uri="ErrorText.brs" />
     <script type="text/brightscript" uri="PlayerScreen.brs" />

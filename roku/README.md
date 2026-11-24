@@ -87,6 +87,9 @@ Put the plaintext token in the ignored `roku/.env` as `HDHOMERUN_API_TOKEN`
 (alongside `HDHOMERUN_WEB_URL`), then repackage and sideload. The token is
 embedded in the Roku package: use a viewer token for playback only or an
 operator token for favorites and DVR changes; never use an admin token.
+The token is sent only to the exact packaged server origin (scheme, host, and
+port). Use the final URL, not a redirect; repackage with the appropriate token
+if you move to another origin. A different URL in Settings uses no token.
 Older Roku builds can still watch public live TV but cannot access protected
 features. Verify private playback on the device after changing auth settings.
 

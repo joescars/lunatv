@@ -398,6 +398,51 @@ test('recordingStream: every start gets its own directory; an old exit cannot re
   assert.ok(!fs.existsSync(dirA));
 });
 
+test('recordingStream: explicit stop removes the dir on any ffmpeg exit (even code 0); natural EOF keeps the VOD', () => {
+  const rs = freshRequire('recordingStream.js');
+  const startOne = (id) => {
+    rs.start(id, `http://10.9.8.7/recorded/play?id=${id}`, 'medium');
+    const proc = spawned[spawned.length - 1];
+    const session = rs._sessions.get(`${id}:medium`);
+    fs.writeFileSync(session.playlist, '#EXTM3U\n#EXT-X-ENDLIST\n');
+    return { proc, session, k: `${id}:medium` };
+  };
+
+  // Stop requested while running; ffmpeg exits cleanly (code 0) on SIGTERM.
+  const a = startOne('stop00');
+  rs.stopById('stop00', 'medium');
+  assert.deepEqual(a.proc.signals, ['SIGTERM']);
+  a.proc.finish(0);
+  assert.ok(!fs.existsSync(a.session.dir), 'stopped session dir removed immediately on code 0');
+  assert.notEqual(rs._sessions.get(a.k), a.session, 'stopped session no longer served');
+
+  // Non-zero exit after an explicit stop also cleans up.
+  const b = startOne('stop01');
+  rs.stopById('stop01', 'medium');
+  b.proc.finish(255);
+  assert.ok(!fs.existsSync(b.session.dir));
+
+  // Natural completion (no stop): VOD stays for seeking, until a later stop releases it.
+  const c = startOne('done00');
+  c.proc.finish(0);
+  assert.ok(fs.existsSync(c.session.dir), 'naturally finished VOD retained');
+  assert.equal(rs._sessions.get(c.k), c.session);
+  rs.stopById('done00', 'medium');
+  assert.ok(!fs.existsSync(c.session.dir), 'stop on a finished VOD releases it');
+
+  // Stopped session replaced by a new start before its ffmpeg exits: the
+  // late code-0 exit removes only the old dir and leaves the replacement.
+  const d = startOne('stop02');
+  rs.stopById('stop02', 'medium');
+  rs.start('stop02', 'http://10.9.8.7/recorded/play?id=stop02', 'medium');
+  const replacement = rs._sessions.get(d.k);
+  assert.notEqual(replacement, d.session);
+  d.proc.finish(0);
+  assert.ok(!fs.existsSync(d.session.dir));
+  assert.ok(fs.existsSync(replacement.dir), 'replacement dir untouched');
+  assert.equal(rs._sessions.get(d.k), replacement, 'replacement still registered');
+});
+
 test('recordingStream: isReady sanitizes stderr and SIGKILL fallback applies on stop', async () => {
   const rs = freshRequire('recordingStream.js');
   rs.start('beef01', 'http://10.9.8.7/recorded/play?id=beef01', 'medium');
@@ -431,8 +476,85 @@ test('STREAM_DECODE_MODE=qsv: hwaccel stays on, decoder is auto-selected for h26
     assert.equal(after[after.indexOf('-c:v') + 1], encoder);
     assert.ok(!after.join(' ').includes('hwupload'), 'frames are already on the GPU in qsv decode mode');
     const info = stream.getSessionInfo(channel, codec, 'medium');
-    assert.equal(info.ffmpeg.decodeMode, 'qsv');
+    assert.equal(info.ffmpeg.decodeMode, 'hw', 'legacy qsv value is the hw decode mode');
+    assert.equal(info.ffmpeg.hwAccel, 'qsv');
   }
+  // QSV hardware decode drops A/53 CC: diagnostics must not claim captions.
+  const h264 = stream.getSessionInfo('21.1', 'h264', 'medium').ffmpeg;
+  assert.equal(h264.captionActive, false);
+  assert.equal(h264.captionStrategy, 'a53cc_h264_qsv_hw_decode_drops_captions');
+});
+
+// ------------------------------------------------- HW_ACCEL (ADR 0001)
+test('hwAccel: defaults to qsv, normalizes case, rejects unknown values; decode mode accepts hw and legacy qsv', () => {
+  const hw = freshRequire('hwAccel.js');
+  assert.equal(hw.resolveHwAccel({}), 'qsv');
+  assert.equal(hw.resolveHwAccel({ HW_ACCEL: ' ' }), 'qsv');
+  assert.equal(hw.resolveHwAccel({ HW_ACCEL: 'NVIDIA' }), 'nvidia');
+  assert.throws(() => hw.resolveHwAccel({ HW_ACCEL: 'nvenc' }), hw.HwAccelConfigError);
+  assert.equal(hw.resolveDecodeMode({}), 'sw');
+  assert.equal(hw.resolveDecodeMode({ STREAM_DECODE_MODE: 'hw' }), 'hw');
+  assert.equal(hw.resolveDecodeMode({ STREAM_DECODE_MODE: 'qsv' }), 'hw');
+  assert.equal(hw.describeTranscoding({ HW_ACCEL: 'nvidia' }).summary, 'NVIDIA NVENC encode, software decode');
+});
+
+test('HW_ACCEL=nvidia, software decode: nvenc encoders, no QSV device or upload, captions on h264 only', () => {
+  const stream = freshRequire('stream.js', { HW_ACCEL: 'nvidia', STREAM_DECODE_MODE: 'sw' });
+  assert.deepEqual(stream.CODECS, { h264: 'h264_nvenc', hevc: 'hevc_nvenc' });
+  for (const [channel, codec, encoder, captions] of [['31.1', 'h264', 'h264_nvenc', true], ['31.2', 'hevc', 'hevc_nvenc', false]]) {
+    stream.start(channel, codec, 'medium', 20);
+    const proc = spawned[spawned.length - 1];
+    assert.ok(!proc.args.some((a) => /qsv|hwupload|init_hw_device/.test(a)), proc.args.join(' '));
+    assert.ok(!inputArgs(proc).includes('-hwaccel'));
+    const after = outputArgs(proc);
+    assert.equal(after[after.indexOf('-c:v') + 1], encoder);
+    assert.equal(after.includes('-a53cc'), captions);
+    assert.equal(after[after.indexOf('-forced-idr') + 1], '1');
+    assert.ok(!after.includes('-look_ahead'), 'QSV-only option must not reach nvenc');
+    const info = stream.getSessionInfo(channel, codec, 'medium').ffmpeg;
+    assert.equal(info.hwAccel, 'nvidia');
+    assert.equal(info.captionActive, captions);
+    assert.equal(info.captionStrategy, captions ? 'a53cc_h264_nvenc' : 'no_a53cc_hevc_nvenc');
+  }
+});
+
+test('HW_ACCEL=nvidia, hardware decode: cuda hwaccel, captions reported lost', () => {
+  const stream = freshRequire('stream.js', { HW_ACCEL: 'nvidia', STREAM_DECODE_MODE: 'hw' });
+  stream.start('32.1', 'h264', 'medium', 20);
+  const proc = spawned[spawned.length - 1];
+  const before = inputArgs(proc);
+  assert.deepEqual(before.slice(before.indexOf('-hwaccel')), ['-hwaccel', 'cuda', '-hwaccel_output_format', 'cuda']);
+  assert.ok(!before.includes('-c:v'));
+  assert.ok(!outputArgs(proc).includes('-vf'), 'frames stay on the GPU');
+  const info = stream.getSessionInfo('32.1', 'h264', 'medium').ffmpeg;
+  assert.equal(info.decodeMode, 'hw');
+  assert.equal(info.videoDecoder, 'auto_cuda');
+  assert.equal(info.captionActive, false);
+  assert.equal(info.captionStrategy, 'a53cc_h264_nvenc_hw_decode_drops_captions');
+});
+
+test('recordingStream uses the configured accelerator encoder', () => {
+  const nv = freshRequire('recordingStream.js', { HW_ACCEL: 'nvidia' });
+  nv.start('rec-nv', 'http://10.1.2.3/rec.mpg', 'medium');
+  const nvArgs = spawned[spawned.length - 1].args;
+  assert.equal(nvArgs[nvArgs.indexOf('-c:v') + 1], 'h264_nvenc');
+  assert.ok(!nvArgs.some((a) => /qsv|look_ahead/.test(a)));
+
+  const qsv = freshRequire('recordingStream.js');
+  qsv.start('rec-qsv', 'http://10.1.2.3/rec.mpg', 'medium');
+  const qsvArgs = spawned[spawned.length - 1].args;
+  assert.equal(qsvArgs[qsvArgs.indexOf('-c:v') + 1], 'h264_qsv');
+});
+
+test('server exits at startup on an unknown HW_ACCEL', () => {
+  const out = childProcess.spawnSync(process.execPath, ['server.js'], {
+    cwd: path.join(__dirname, '..'),
+    env: { ...process.env, HW_ACCEL: 'nvenc', PORT: '0' },
+    encoding: 'utf8',
+    timeout: 10_000,
+  });
+  assert.equal(out.status, 1);
+  assert.match(out.stderr, /Invalid HW_ACCEL "nvenc"\. Supported values: qsv, nvidia\./);
 });
 
 // -------------------------------------- WebVTT sidecar diagnostics (/stats)
@@ -544,4 +666,104 @@ test('docker-entrypoint.sh: drops root to node with the GPU node group IDs (stub
   out = run();
   assert.match(out.stdout, /--clear-groups -- node server\.js/);
   assert.match(out.stderr, /no group-accessible \/dev\/dri/);
+  out = run({ HW_ACCEL: 'nvidia' });
+  assert.match(out.stdout, /--clear-groups -- node server\.js/);
+  assert.equal(out.stderr, '', 'NVIDIA hosts need no /dev/dri, so no QSV warning');
+});
+
+// ------------------------------------------------- RECORD stopRecording
+const ACTIVE = {
+  id: 'ab', SeriesID: 'S1', ChannelNumber: '2.1', StartTime: 1000, CmdURL: 'http://10.9.8.7/cmd?id=ab',
+};
+
+// Routes stubbed fetch calls by endpoint; `fail` maps a step to 'status' | 'throw'.
+function stubStopFetch(fail = {}) {
+  const calls = [];
+  global.fetch = async (url, options = {}) => {
+    const u = String(url);
+    const step = u.includes('recording_events.post') ? 'sync'
+      : u.includes('Cmd=delete') ? 'ruleDelete'
+        : u.includes('api.hdhomerun.com') ? 'ruleList'
+          : u.includes('cmd=delete') ? 'fileDelete' : 'other';
+    calls.push(step);
+    if (fail[step] === 'throw') throw new Error(`${step} timed out`);
+    const ok = fail[step] !== 'status';
+    const body = step === 'ruleList'
+      ? JSON.stringify([{ RecordingRuleID: 'R9', SeriesID: 'S1', ChannelOnly: '2.1', DateTimeOnly: 1000 }])
+      : '';
+    return { ok, status: ok ? 200 : 500, statusText: ok ? 'OK' : 'Boom', text: async () => body };
+  };
+  return calls;
+}
+
+async function freshStopRecord() {
+  const record = freshRequire('hdhomerunRecord.js');
+  require(src('hdhomerun.js')).getDeviceInfo = async () => ({ DeviceAuth: 'auth' });
+  return record;
+}
+
+test('stopRecording deletes rule, syncs, then deletes the file', async () => {
+  const record = await freshStopRecord();
+  const calls = stubStopFetch();
+  const result = await record.stopRecording(ACTIVE);
+  assert.deepEqual(calls, ['ruleList', 'ruleDelete', 'sync', 'fileDelete']);
+  assert.deepEqual(result, { ruleDeleted: true, synced: true, fileDeleted: true, warning: null });
+});
+
+for (const mode of ['throw', 'status']) {
+  test(`stopRecording still deletes the active file when engine sync fails (${mode}) and reports a warning`, async () => {
+    const record = await freshStopRecord();
+    const calls = stubStopFetch({ sync: mode });
+    const result = await record.stopRecording(ACTIVE);
+    assert.deepEqual(calls, ['ruleList', 'ruleDelete', 'sync', 'fileDelete']);
+    assert.equal(result.ruleDeleted, true);
+    assert.equal(result.synced, false);
+    assert.equal(result.fileDeleted, true);
+    assert.match(result.warning, /Engine sync failed/);
+  });
+}
+
+test('stopRecording reports file-delete failure separately, including rule and sync outcomes', async () => {
+  const record = await freshStopRecord();
+  let calls = stubStopFetch({ fileDelete: 'status' });
+  await assert.rejects(record.stopRecording(ACTIVE), (err) => (
+    /Recording file delete failed \(rule deleted; engine synced\)/.test(err.message)
+    && err.ruleDeleted === true && err.synced === true
+  ));
+  assert.deepEqual(calls, ['ruleList', 'ruleDelete', 'sync', 'fileDelete']);
+
+  // Both sync and file deletion fail: both are visible, and delete was still tried.
+  calls = stubStopFetch({ sync: 'throw', fileDelete: 'throw' });
+  await assert.rejects(record.stopRecording(ACTIVE), (err) => (
+    /rule deleted; Engine sync failed: sync timed out\): fileDelete timed out/.test(err.message)
+    && err.ruleDeleted === true && err.synced === false
+  ));
+  assert.deepEqual(calls, ['ruleList', 'ruleDelete', 'sync', 'fileDelete']);
+});
+
+test('stopRecording does not delete the file or sync when rule deletion fails', async () => {
+  const record = await freshStopRecord();
+  const calls = stubStopFetch({ ruleDelete: 'status' });
+  await assert.rejects(record.stopRecording(ACTIVE), /Recording rule delete failed/);
+  assert.deepEqual(calls, ['ruleList', 'ruleDelete']);
+});
+
+test('POST /api/recordings/:id/stop surfaces the sync warning and file-delete errors', async () => {
+  delete require.cache[require.resolve(src('routes/recordings.js'))];
+  const record = require(src('hdhomerunRecord.js'));
+  const orig = { ...record };
+  record.getRecording = async () => ({ ...ACTIVE, recording: true });
+  const app = express();
+  app.use(require(src('routes/recordings.js')));
+  const server = await listen(app);
+  try {
+    record.stopRecording = async () => ({ ruleDeleted: true, synced: false, fileDeleted: true, warning: 'Engine sync failed: x; recording file was deleted anyway' });
+    let res = await request(server, 'POST', '/api/recordings/ab/stop');
+    assert.equal(res.status, 200);
+    assert.deepEqual(JSON.parse(res.body), { stopped: true, warning: 'Engine sync failed: x; recording file was deleted anyway' });
+    record.stopRecording = async () => { throw new Error('Recording file delete failed (rule deleted; engine synced): nope'); };
+    res = await request(server, 'POST', '/api/recordings/ab/stop');
+    assert.equal(res.status, 502);
+    assert.match(res.body, /Recording file delete failed/);
+  } finally { server.close(); Object.assign(record, orig); }
 });

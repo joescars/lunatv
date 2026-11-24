@@ -17,7 +17,7 @@ const apiRoutes = require('./routes/api');
 
 // Builds the Express app without listening so tests can drive the real
 // middleware order. `env` only feeds the auth configuration.
-function createApp({ env = process.env } = {}) {
+function createApp({ env = process.env, transcoding } = {}) {
   const app = express();
   const ASSET_VERSION = env.ASSET_VERSION || Date.now().toString();
   const auth = createAuth(env);
@@ -45,6 +45,7 @@ function createApp({ env = process.env } = {}) {
 
   app.locals.deviceSystemLogUrl = `http://${hdhr.HOST}/log.html`;
   app.locals.assetVersion = ASSET_VERSION;
+  app.locals.transcoding = transcoding;
   app.use((req, res, next) => {
     res.locals.currentPath = req.path;
     next();

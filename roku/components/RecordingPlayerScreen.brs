@@ -40,7 +40,7 @@ sub onStreamResult(event as object)
     content = CreateObject("roSGNode", "ContentNode")
     content.url = m.top.serverUrl + "/recordings/" + m.top.recordingId + "/medium/stream.m3u8"
     content.streamFormat = "hls"
-    applyAuthHeader(content)
+    Net_ConfigureVideoAuth(content)
     m.video.content = content
     m.overlay.visible = false
     m.status.visible = false
@@ -89,11 +89,4 @@ sub requestRecordingStop()
     task.recordingId = m.top.recordingId
     task.profile = "medium"
     task.control = "RUN"
-end sub
-
-' Playlist/segment requests made by the Video node bypass Net.brs, so the
-' optional API token must be set on the content itself.
-sub applyAuthHeader(content as object)
-    token = GetPackagedApiToken()
-    if token <> "" then content.HttpHeaders = ["Authorization: Bearer " + token]
 end sub

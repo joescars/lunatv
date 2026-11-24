@@ -1,0 +1,28 @@
+# NVIDIA override: use an NVIDIA GPU (NVENC/CUDA) instead of Intel QSV.
+# Requires the NVIDIA driver and nvidia-container-toolkit on the host, and
+# Docker Compose v2.24+ (for !reset). Set HW_ACCEL=nvidia in .env, then:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.nvidia.yml up -d
+#
+# Combine with the dev override to run local code:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml \
+#     -f docker-compose.nvidia.yml up -d --build
+services:
+  hdhomerun-web:
+    # Drop the base file's /dev/dri mapping; NVIDIA hosts may not have one.
+    devices: !reset []
+    environment:
+      - HW_ACCEL=${HW_ACCEL:-nvidia}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      # video = NVENC/NVDEC; compute + utility = CUDA and nvidia-smi.
+      - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              # Docker's documented form; NVIDIA_DRIVER_CAPABILITIES above
+              # selects video (NVENC/NVDEC) + compute + utility.
+              capabilities: [gpu]

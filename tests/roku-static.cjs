@@ -51,6 +51,20 @@ test('Net.brs configures a CA bundle for https URLs on both GET and POST', () =>
   assert.equal((net.match(/Net_ConfigureTls\(xfer, url\)/g) || []).length, 2);
 });
 
+test('Roku API and video requests share the packaged-origin token check', () => {
+  const net = read('components/Net.brs');
+  assert.match(net, /base = GetPackagedServerUrl\(\)/);
+  assert.match(net, /prefix = base \+ "\/"\s+if Left\(url, Len\(prefix\)\) <> prefix then return ""/);
+  assert.equal((net.match(/Net_ConfigureAuth\(xfer, url\)/g) || []).length, 2);
+  assert.match(net, /value = Net_AuthValue\(content.url\)/);
+  assert.match(net, /content.HttpHeaders = headers/);
+  for (const screen of ['GuideScreen', 'PlayerScreen', 'RecordingPlayerScreen']) {
+    assert.match(read(`components/${screen}.xml`), /Net\.brs/);
+    assert.match(read(`components/${screen}.brs`), /Net_ConfigureVideoAuth\(content\)/);
+    assert.doesNotMatch(read(`components/${screen}.brs`), /GetPackagedApiToken\(/);
+  }
+});
+
 test('recording player releases its transcode on Back and trims errors', () => {
   const screen = read('components/RecordingPlayerScreen.brs');
   const back = screen.slice(screen.indexOf('key = "back"'), screen.indexOf('end function', screen.indexOf('key = "back"')));

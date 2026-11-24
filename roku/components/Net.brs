@@ -1,6 +1,6 @@
 ' Shared networking helpers for Task nodes.
 '
-' CRITICAL: these functions must only ever be called from inside a Task node's
+' CRITICAL: Net_HttpGet and Net_HttpPost must only be called from a Task node's
 ' thread (i.e. from a function invoked via Task control="RUN"), never from the
 ' render thread. They perform blocking-with-timeout HTTP calls using an
 ' roUrlTransfer + roMessagePort + wait() pattern so a hung connection can
@@ -20,9 +20,29 @@ end sub
 ' guide/stream playback without it; recordings and mutations (favorite, record,
 ' delete) need a token whose role allows them. Empty token = send nothing, so
 ' unauthenticated deployments are unchanged.
-sub Net_ConfigureAuth(xfer as object)
+function Net_AuthValue(url as string) as string
+    base = GetPackagedServerUrl()
     token = GetPackagedApiToken()
-    if token <> "" then xfer.AddHeader("Authorization", "Bearer " + token)
+    if base = "" or token = "" then return ""
+    ' Match the exact packaged base including scheme, host and port. The
+    ' slash boundary keeps similarly named servers from receiving the token.
+    prefix = base + "/"
+    if Left(url, Len(prefix)) <> prefix then return ""
+    return "Bearer " + token
+end function
+
+sub Net_ConfigureAuth(xfer as object, url as string)
+    value = Net_AuthValue(url)
+    if value <> "" then xfer.AddHeader("Authorization", value)
+end sub
+
+' Video fetches playlists and segments itself instead of using Net_HttpGet.
+sub Net_ConfigureVideoAuth(content as object)
+    value = Net_AuthValue(content.url)
+    headers = []
+    if value <> "" then headers.Push("Authorization:" + value)
+    ' Replace any headers left by previous playback on a reused Video node.
+    content.HttpHeaders = headers
 end sub
 
 ' Performs a GET request with a timeout.
@@ -33,7 +53,7 @@ function Net_HttpGet(url as string, timeoutMs as integer) as object
     xfer.SetMessagePort(port)
     xfer.SetUrl(url)
     Net_ConfigureTls(xfer, url)
-    Net_ConfigureAuth(xfer)
+    Net_ConfigureAuth(xfer, url)
     xfer.SetRequest("GET")
     xfer.EnableEncodings(true)
     xfer.RetainBodyOnError(true)
@@ -70,7 +90,7 @@ function Net_HttpPost(url as string, timeoutMs as integer) as object
     xfer.SetMessagePort(port)
     xfer.SetUrl(url)
     Net_ConfigureTls(xfer, url)
-    Net_ConfigureAuth(xfer)
+    Net_ConfigureAuth(xfer, url)
     xfer.EnableEncodings(true)
     xfer.RetainBodyOnError(true)
     xfer.AddHeader("Content-Length", "0")

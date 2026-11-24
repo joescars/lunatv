@@ -5,7 +5,11 @@ const os = require('os');
 const crypto = require('crypto');
 
 const { sanitizeFfmpegError, terminate } = require('./ffmpegSupport');
+const { getAccelerator } = require('./hwAccel');
 
+// Recordings are software-decoded and encoded with the configured hardware
+// accelerator's H.264 encoder (h264_qsv or h264_nvenc).
+const ACCEL = getAccelerator();
 const ROOT = path.join(os.tmpdir(), 'hdhomerun-web-recordings');
 const IDLE_TIMEOUT_MS = 60_000;
 // A recording that transcoded to EOF is a complete VOD; keep it seekable longer than a live session.
@@ -32,6 +36,9 @@ function finished(session) {
 function stop(session, sessionKey) {
   if (!session) return;
   if (session.process.exitCode === null) {
+    // Remember the intent: ffmpeg usually exits 0 on SIGTERM, which must not
+    // be mistaken for a naturally completed VOD in the exit handler.
+    session.stopRequested = true;
     terminate(session.process);
     return;
   }
@@ -65,7 +72,7 @@ function start(id, sourceUrl, profile) {
     '-hide_banner', '-loglevel', 'warning',
     '-i', sourceUrl,
     '-map', '0:v:0', '-map', '0:a:0?',
-    '-c:v', 'h264_qsv', '-look_ahead', '0', '-forced_idr', '1',
+    '-c:v', ACCEL.encoders.h264, ...ACCEL.encoderArgs,
     '-b:v', config.videoBitrate, '-maxrate', config.maxrate, '-bufsize', config.bufsize,
     '-g', '30', '-force_key_frames', 'expr:eq(n,0)+gte(t,n_forced*1)',
     '-c:a', 'aac', '-b:a', config.audioBitrate, '-ac', '2',
@@ -96,7 +103,7 @@ function start(id, sourceUrl, profile) {
     // Clean EOF of the current session: keep the finished playlist
     // (EXT-X-ENDLIST) and segments so the player can finish and seek; the idle
     // sweep / stop removes them.
-    if (code === 0 && owner) return;
+    if (code === 0 && owner && !session.stopRequested) return;
     if (code !== 0 && stderr) {
       console.warn(`[recording-stream] ffmpeg tail id=${id}: ${stderr.replace(/\s+/g, ' ').trim().slice(-1200)}`);
     }
@@ -104,6 +111,11 @@ function start(id, sourceUrl, profile) {
     // including after a restart replaced this session in the map.
     fs.rmSync(dir, { recursive: true, force: true });
     if (!owner) return;
+    if (session.stopRequested) {
+      // Explicit stop: release the session now; a replacement (not owner) is untouched.
+      sessions.delete(sessionKey);
+      return;
+    }
     setTimeout(() => {
       if (sessions.get(sessionKey) === session) sessions.delete(sessionKey);
     }, IDLE_TIMEOUT_MS).unref();

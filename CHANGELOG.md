@@ -2,7 +2,28 @@
 
 All notable changes to this project are documented in this file.
 
-## Unreleased
+## 2026-11-23
+
+### Added: NVIDIA hardware encoding/decoding (`HW_ACCEL`)
+
+- New `HW_ACCEL=qsv|nvidia` setting (default `qsv`) picks the GPU vendor for
+  live streams and recordings: `h264_qsv`/`hevc_qsv` or
+  `h264_nvenc`/`hevc_nvenc`. An unknown value stops the server at startup.
+- `STREAM_DECODE_MODE` is now `sw|hw`, independent of vendor; `qsv` is kept as
+  a legacy alias for `hw`. NVIDIA hardware decode uses `-hwaccel cuda`. See
+  `docs/adr/0001-hardware-accelerator-separate-from-decode-mode.md`.
+- `docker-compose.nvidia.yml` drops the `/dev/dri` mapping and reserves the
+  NVIDIA GPU (needs nvidia-container-toolkit). Same image. Set
+  `COMPOSE_FILE=docker-compose.yml:docker-compose.nvidia.yml` in `.env` to
+  use it without `-f` flags. Live playback and browser captions (H.264,
+  software decode) verified on a GTX 1050.
+- Captions: H.264 keeps embedded captions with software decode on both
+  vendors (`-a53cc`). HEVC has no captions on either vendor (`hevc_nvenc`
+  captions were not observed on Roku), and hardware decode drops captions on
+  both; diagnostics now report `captionActive: false` for those cases and
+  include `hwAccel`.
+- Admin → Status and the startup log show the active accelerator and decode
+  mode.
 
 ### Added: authentication and role-based authorization (#58)
 
