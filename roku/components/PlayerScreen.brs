@@ -254,6 +254,7 @@ sub playStream()
     content = CreateObject("roSGNode", "ContentNode")
     content.url = url
     content.streamFormat = "hls"
+    Net_ConfigureVideoAuth(content)
     content.live = true
 
     ' Unlike a TV or browser, Roku's Video node does not auto-detect

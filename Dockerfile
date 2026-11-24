@@ -30,10 +30,10 @@ RUN chmod 0755 /app/docker-entrypoint.sh
 ENV PORT=8080
 EXPOSE 8080
 
-# Liveness only: /stream/metrics is served from in-process state and never
-# touches the HDHomeRun, so a tuner outage does not mark the container unhealthy.
+# Liveness only: /healthz is served from in-process state, needs no login and
+# never touches the HDHomeRun, so a tuner outage does not mark the container unhealthy.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD ["node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/stream/metrics',{signal:AbortSignal.timeout(4000)}).then((r)=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+  CMD ["node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/healthz',{signal:AbortSignal.timeout(4000)}).then((r)=>process.exit(r.ok?0:1),()=>process.exit(1))"]
 
 # The entrypoint starts as root only to read the /dev/dri group IDs and then
 # drops to the unprivileged `node` user (with those groups) before running the app.

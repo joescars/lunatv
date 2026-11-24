@@ -5,6 +5,7 @@
         <field id="channelNumber" type="string" />
         <field id="result" type="assocarray" alwaysNotify="true" />
     </interface>
+    <script type="text/brightscript" uri="DeployConfig.brs" />
     <script type="text/brightscript" uri="Net.brs" />
     <script type="text/brightscript" uri="RecordCurrentTask.brs" />
 </component>

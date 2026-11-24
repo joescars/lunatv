@@ -11,6 +11,9 @@
     </nav>
     <div class="app-header-actions">
       <a href="/admin" class="icon-link<%= admin ? ' is-current' : '' %>" aria-label="Device administration" title="Device administration"><i class="bi bi-gear" aria-hidden="true"></i></a>
+      <% if (typeof auth !== 'undefined' && auth && auth.canSignOut) { %>
+        <form method="post" action="/logout" class="d-inline"><button type="submit" class="icon-link border-0 bg-transparent" aria-label="Sign out <%= auth.user %>" title="Sign out <%= auth.user %>"><i class="bi bi-box-arrow-right" aria-hidden="true"></i></button></form>
+      <% } %>
       <md-icon-button id="theme-toggle" aria-label="Switch theme" title="Switch theme"><i class="bi bi-moon" aria-hidden="true"></i></md-icon-button>
     </div>
   </div>

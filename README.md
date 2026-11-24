@@ -62,6 +62,10 @@ COMPOSE_FILE=docker-compose.yml:docker-compose.nvidia.yml
 
 ## Configuration
 
+For built-in login, Roku/API tokens, role permissions, and safe network exposure,
+see [Authentication](docs/authentication.md). The published image may predate
+these changes; use the local development Compose override until its digest is updated.
+
 `HDHOMERUN_HOST` is required. Other settings:
 
 | Variable | Default | Purpose |

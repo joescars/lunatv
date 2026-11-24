@@ -574,6 +574,7 @@ sub onPreviewStreamResult(event as object)
     content = CreateObject("roSGNode", "ContentNode")
     content.url = url
     content.streamFormat = "hls"
+    Net_ConfigureVideoAuth(content)
     content.live = true
 
     m.previewVideo.content = content

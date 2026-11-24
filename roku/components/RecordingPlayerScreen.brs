@@ -40,6 +40,7 @@ sub onStreamResult(event as object)
     content = CreateObject("roSGNode", "ContentNode")
     content.url = m.top.serverUrl + "/recordings/" + m.top.recordingId + "/medium/stream.m3u8"
     content.streamFormat = "hls"
+    Net_ConfigureVideoAuth(content)
     m.video.content = content
     m.overlay.visible = false
     m.status.visible = false
