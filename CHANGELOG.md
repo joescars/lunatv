@@ -13,7 +13,9 @@ All notable changes to this project are documented in this file.
   a legacy alias for `hw`. NVIDIA hardware decode uses `-hwaccel cuda`. See
   `docs/adr/0001-hardware-accelerator-separate-from-decode-mode.md`.
 - `docker-compose.nvidia.yml` drops the `/dev/dri` mapping and reserves the
-  NVIDIA GPU (needs nvidia-container-toolkit). Same image.
+  NVIDIA GPU (needs nvidia-container-toolkit). Same image. Set
+  `COMPOSE_FILE=docker-compose.yml:docker-compose.nvidia.yml` in `.env` to
+  use it without `-f` flags. Live playback verified on a GTX 1050.
 - NVENC sets `-a53cc` for H.264 and HEVC. Stream diagnostics include
   `hwAccel`; QSV hardware decode now reports `captionActive: false` (it drops
   captions) and NVIDIA hardware decode reports `null` (unverified).

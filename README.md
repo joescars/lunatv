@@ -54,6 +54,12 @@ docker compose -f docker-compose.yml -f docker-compose.nvidia.yml up -d
 
 The override removes the `/dev/dri` mapping and reserves the GPU. The image is the same; Jellyfin ffmpeg includes NVENC. **Admin → Status** and the startup log show which accelerator is active. To run the local checkout on NVIDIA, add `-f docker-compose.dev.yml` before the NVIDIA file and pass `--build`.
 
+To skip the `-f` flags, add this to `.env`; plain `docker compose up -d` then includes the override:
+
+```dotenv
+COMPOSE_FILE=docker-compose.yml:docker-compose.nvidia.yml
+```
+
 ## Configuration
 
 `HDHOMERUN_HOST` is required. Other settings:
