@@ -15,7 +15,8 @@ All notable changes to this project are documented in this file.
 - `docker-compose.nvidia.yml` drops the `/dev/dri` mapping and reserves the
   NVIDIA GPU (needs nvidia-container-toolkit). Same image. Set
   `COMPOSE_FILE=docker-compose.yml:docker-compose.nvidia.yml` in `.env` to
-  use it without `-f` flags. Live playback verified on a GTX 1050.
+  use it without `-f` flags. Live playback and browser captions (H.264,
+  software decode) verified on a GTX 1050.
 - NVENC sets `-a53cc` for H.264 and HEVC. Stream diagnostics include
   `hwAccel`; QSV hardware decode now reports `captionActive: false` (it drops
   captions) and NVIDIA hardware decode reports `null` (unverified).

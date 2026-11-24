@@ -46,9 +46,9 @@ true now:
   during diagnosis — the sidecar's plumbing "looked" more standard while
   being the actually-broken path.
 - **NVIDIA (`HW_ACCEL=nvidia`)**: `h264_nvenc` and `hevc_nvenc` both expose
-  `-a53cc` (default on), so the app sets it for both codecs. With software
-  decode this is the same pipeline as QSV and is expected to work; it has
-  not yet been confirmed on NVIDIA hardware. With `STREAM_DECODE_MODE=hw`
+  `-a53cc` (default on), so the app sets it for both codecs. Browser
+  captions with `h264_nvenc` and software decode are confirmed working on a
+  GTX 1050. With `STREAM_DECODE_MODE=hw`
   (`-hwaccel cuda`) diagnostics report `captionActive: null` (unverified),
   and QSV hardware decode now reports `captionActive: false`. HEVC captions
   on Roku need a separate confirmation before the Roku Settings text changes.
